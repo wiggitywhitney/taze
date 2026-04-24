@@ -54,6 +54,7 @@
   "devDependencies": {
     "@antfu/eslint-config": "catalog:dev",
     "@antfu/utils": "catalog:inlined",
+    "@opentelemetry/api": "^1.9.1",
     "@posva/prompts": "catalog:inlined",
     "@types/cli-progress": "catalog:types",
     "@types/debug": "catalog:types",
