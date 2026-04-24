@@ -1,0 +1,12 @@
+# taze Telemetry Registry
+# OpenTelemetry Weaver schema for taze dependency version checking and updating
+
+name: taze
+description: OpenTelemetry semantic conventions for taze dependency freshness tool
+semconv_version: 0.1.0
+
+schema_base_url: https://taze.dev/schemas/
+
+dependencies:
+  - name: otel
+    registry_path: https://github.com/open-telemetry/semantic-conventions/archive/refs/tags/v1.37.0.zip[model]

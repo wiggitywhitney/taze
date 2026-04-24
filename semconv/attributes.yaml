@@ -1,0 +1,95 @@
+# taze Attribute Definitions
+# Custom attributes for taze dependency checking and update operations
+
+groups:
+  # ==========================================================================
+  # CHECK OPERATION ATTRIBUTES
+  # Describes a taze check run across one or more package.json files
+  # ==========================================================================
+  - id: registry.taze.check
+    type: attribute_group
+    display_name: Check Operation Attributes
+    brief: Attributes describing a taze dependency check run
+    attributes:
+      - id: taze.check.mode
+        type:
+          members:
+            - id: patch
+              value: patch
+              brief: Check for patch-level updates only
+              stability: development
+            - id: minor
+              value: minor
+              brief: Check for minor and patch updates
+              stability: development
+            - id: major
+              value: major
+              brief: Check for all updates including major version bumps
+              stability: development
+            - id: newest
+              value: newest
+              brief: Check for the absolute newest version ignoring ranges
+              stability: development
+            - id: latest
+              value: latest
+              brief: Check for the latest stable version
+              stability: development
+        stability: development
+        brief: The version range mode used for the check (major/minor/patch/newest/latest)
+        examples:
+          - "major"
+          - "minor"
+
+      - id: taze.check.recursive
+        type: boolean
+        stability: development
+        brief: Whether the check searched subdirectories recursively for package.json files
+
+      - id: taze.check.packages_total
+        type: int
+        stability: development
+        brief: Total number of dependency entries checked across all package.json files
+        examples:
+          - 42
+          - 7
+
+      - id: taze.check.packages_outdated
+        type: int
+        stability: development
+        brief: Number of dependencies found to have available updates
+        examples:
+          - 12
+          - 0
+
+  # ==========================================================================
+  # PACKAGE ATTRIBUTES
+  # Per-package version resolution results
+  # ==========================================================================
+  - id: registry.taze.package
+    type: attribute_group
+    display_name: Package Attributes
+    brief: Attributes describing a single dependency resolution
+    attributes:
+      - id: taze.package.name
+        type: string
+        stability: development
+        brief: The npm package name being resolved
+        examples:
+          - "vitest"
+          - "@antfu/eslint-config"
+
+      - id: taze.package.current_version
+        type: string
+        stability: development
+        brief: The version specifier currently in package.json
+        examples:
+          - "^3.0.0"
+          - "1.2.3"
+
+      - id: taze.package.latest_version
+        type: string
+        stability: development
+        brief: The resolved latest version available in the registry
+        examples:
+          - "4.1.2"
+          - "2.0.0"

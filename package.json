@@ -74,6 +74,14 @@
     "typescript": "catalog:dev",
     "vitest": "catalog:dev"
   },
+  "peerDependencies": {
+    "@opentelemetry/api": ">=1.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@opentelemetry/api": {
+      "optional": true
+    }
+  },
   "inlinedDependencies": {
     "@antfu/utils": "9.3.0",
     "@posva/prompts": "2.4.4",
