@@ -45,6 +45,11 @@ groups:
         stability: development
         brief: Whether the check searched subdirectories recursively for package.json files
 
+      - id: taze.check.write_mode
+        type: boolean
+        stability: development
+        brief: Whether taze was run with --write to update package.json files in place
+
       - id: taze.check.packages_total
         type: int
         stability: development
@@ -93,3 +98,105 @@ groups:
         examples:
           - "4.1.2"
           - "2.0.0"
+
+      - id: taze.package.update_available
+        type: boolean
+        stability: development
+        brief: Whether a version update is available for this dependency
+
+      - id: taze.package.registry
+        type:
+          members:
+            - id: npm
+              value: npm
+              brief: npm registry (registry.npmjs.org)
+              stability: development
+            - id: jsr
+              value: jsr
+              brief: JSR registry (jsr.io)
+              stability: development
+        stability: development
+        brief: The package registry used to resolve this dependency
+
+  # ==========================================================================
+  # REGISTRY FETCH ATTRIBUTES
+  # Describes a single HTTP call to the npm or JSR registry
+  # ==========================================================================
+  - id: registry.taze.fetch
+    type: attribute_group
+    display_name: Registry Fetch Attributes
+    brief: Attributes describing a package metadata fetch from npm or JSR registry
+    attributes:
+      - id: taze.fetch.registry
+        type:
+          members:
+            - id: npm
+              value: npm
+              brief: Fetched from npm registry via get-npm-meta
+              stability: development
+            - id: jsr
+              value: jsr
+              brief: Fetched from JSR registry (jsr.io)
+              stability: development
+        stability: development
+        brief: The registry from which package metadata was fetched
+
+      - id: taze.fetch.error
+        type: string
+        stability: development
+        brief: Error message or status code if the fetch failed
+        examples:
+          - "404"
+          - "Timeout requesting \"some-package\""
+
+  # ==========================================================================
+  # WRITE OPERATION ATTRIBUTES
+  # Describes a package.json (or equivalent) write after version updates
+  # ==========================================================================
+  - id: registry.taze.write
+    type: attribute_group
+    display_name: Write Operation Attributes
+    brief: Attributes describing a file write of updated dependency versions
+    attributes:
+      - id: taze.write.file_path
+        type: string
+        stability: development
+        brief: Absolute or relative path to the package manifest file written
+        examples:
+          - "package.json"
+          - "packages/core/package.json"
+          - "pnpm-workspace.yaml"
+
+      - id: taze.write.changes_count
+        type: int
+        stability: development
+        brief: Number of dependency version entries updated in this write
+        examples:
+          - 3
+          - 12
+
+      - id: taze.write.package_type
+        type:
+          members:
+            - id: package_json
+              value: package.json
+              brief: Standard npm package.json
+              stability: development
+            - id: package_yaml
+              value: package.yaml
+              brief: YAML-format package manifest
+              stability: development
+            - id: pnpm_workspace
+              value: pnpm-workspace.yaml
+              brief: pnpm workspace catalog file
+              stability: development
+            - id: yarnrc
+              value: .yarnrc.yml
+              brief: Yarn workspaces configuration
+              stability: development
+            - id: bun_workspace
+              value: bun-workspace
+              brief: Bun workspace catalog
+              stability: development
+        stability: development
+        brief: The type of package manifest file written
