@@ -9,3 +9,8 @@ groups:
     stability: development
     brief: "Agent-discovered span: taze.cli.action"
     span_kind: internal
+  - id: span.taze.check.global
+    type: span
+    stability: development
+    brief: "Agent-discovered span: taze.check.global"
+    span_kind: internal

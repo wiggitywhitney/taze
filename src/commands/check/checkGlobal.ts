@@ -1,3 +1,4 @@
+import { trace, SpanStatusCode } from '@opentelemetry/api'
 import type { CheckOptions, GlobalPackageMeta, RawDep } from '../../types'
 /* eslint-disable no-console */
 import { getCommand } from '@antfu/ni'
@@ -28,88 +29,112 @@ interface PnpmOut {
   }
 }
 
+const tracer = trace.getTracer('taze')
+
 export async function checkGlobal(options: CheckOptions) {
-  let exitCode = 0
-  let resolvePkgs: GlobalPackageMeta[] = []
+  return tracer.startActiveSpan('taze.check.global', async (span) => {
+    try {
+      let exitCode = 0
+      let resolvePkgs: GlobalPackageMeta[] = []
 
-  const globalPkgs = await Promise.all([
-    loadGlobalNpmPackage(options),
-    loadGlobalPnpmPackage(options),
-  ])
-  const pkgs = globalPkgs.flat(1)
+      if (options.mode != null) {
+        span.setAttribute('taze.check.mode', options.mode)
+      }
+      span.setAttribute('taze.check.write_mode', !!options.write)
 
-  const bars = options.loglevel === 'silent'
-    ? null
-    : createMultiProgressBar()
-  await Promise.all(pkgs.map(async (pkg) => {
-    const depBar = bars?.create(pkg.deps.length, 0, { type: c.green(pkg.agent) })
-    await resolvePackage(
-      pkg,
-      options,
-      () => true,
-      (_pkgName, name, progress) => depBar?.update(progress, { name }),
-    )
-  }))
-  bars?.stop()
+      const globalPkgs = await Promise.all([
+        loadGlobalNpmPackage(options),
+        loadGlobalPnpmPackage(options),
+      ])
+      const pkgs = globalPkgs.flat(1)
 
-  resolvePkgs = pkgs
+      span.setAttribute('taze.check.packages_total', pkgs.reduce((acc, pkg) => acc + pkg.deps.length, 0))
 
-  if (options.interactive)
-    resolvePkgs = await promptInteractive(resolvePkgs, options) as GlobalPackageMeta[]
+      const bars = options.loglevel === 'silent'
+        ? null
+        : createMultiProgressBar()
+      await Promise.all(pkgs.map(async (pkg) => {
+        const depBar = bars?.create(pkg.deps.length, 0, { type: c.green(pkg.agent) })
+        await resolvePackage(
+          pkg,
+          options,
+          () => true,
+          (_pkgName, name, progress) => depBar?.update(progress, { name }),
+        )
+      }))
+      bars?.stop()
 
-  const { lines, errLines } = renderPackages(resolvePkgs, options)
+      resolvePkgs = pkgs
 
-  const hasChanges = resolvePkgs.length && resolvePkgs.some(i => i.resolved.some(j => j.update))
-  if (!hasChanges) {
-    if (errLines.length)
-      outputErr(errLines)
-    else
-      console.log(c.green('dependencies are already up-to-date'))
+      if (options.interactive)
+        resolvePkgs = await promptInteractive(resolvePkgs, options) as GlobalPackageMeta[]
 
-    return exitCode
-  }
+      const { lines, errLines } = renderPackages(resolvePkgs, options)
 
-  console.log(lines.join('\n'))
+      const hasChanges = resolvePkgs.length && resolvePkgs.some(i => i.resolved.some(j => j.update))
 
-  if (errLines.length)
-    outputErr(errLines)
+      span.setAttribute('taze.check.packages_outdated', resolvePkgs.reduce((acc, pkg) => acc + pkg.resolved.filter(j => j.update).length, 0))
 
-  if (options.interactive && !options.install) {
-    options.install = await prompts([
-      {
-        name: 'install',
-        type: 'confirm',
-        initial: true,
-        message: c.green('install now'),
-      },
-    ]).then(r => r.install)
-  }
+      if (!hasChanges) {
+        if (errLines.length)
+          outputErr(errLines)
+        else
+          console.log(c.green('dependencies are already up-to-date'))
 
-  if (!options.write) {
-    console.log()
+        return exitCode
+      }
 
-    if (options.mode === 'default')
-      console.log(`Add ${c.green('major')} to check major updates`)
+      console.log(lines.join('\n'))
 
-    if (hasChanges) {
-      if (options.failOnOutdated)
-        exitCode = 1
+      if (errLines.length)
+        outputErr(errLines)
 
-      console.log(`Add ${c.green('-i')} to update global dependency`)
+      if (options.interactive && !options.install) {
+        options.install = await prompts([
+          {
+            name: 'install',
+            type: 'confirm',
+            initial: true,
+            message: c.green('install now'),
+          },
+        ]).then(r => r.install)
+      }
+
+      if (!options.write) {
+        console.log()
+
+        if (options.mode === 'default')
+          console.log(`Add ${c.green('major')} to check major updates`)
+
+        if (hasChanges) {
+          if (options.failOnOutdated)
+            exitCode = 1
+
+          console.log(`Add ${c.green('-i')} to update global dependency`)
+        }
+
+        console.log()
+      }
+
+      if (options.install) {
+        console.log(c.magenta('installing...'))
+        console.log()
+
+        for (const pkg of resolvePkgs)
+          await installPkg(pkg)
+      }
+
+      return exitCode
     }
-
-    console.log()
-  }
-
-  if (options.install) {
-    console.log(c.magenta('installing...'))
-    console.log()
-
-    for (const pkg of resolvePkgs)
-      await installPkg(pkg)
-  }
-
-  return exitCode
+    catch (error) {
+      span.recordException(error instanceof Error ? error : new Error(String(error)))
+      span.setStatus({ code: SpanStatusCode.ERROR })
+      throw error
+    }
+    finally {
+      span.end()
+    }
+  })
 }
 
 async function loadGlobalPnpmPackage(options: CheckOptions): Promise<GlobalPackageMeta[]> {
