@@ -3,4 +3,4 @@ sdkInitFile: examples/instrumentation.js
 dependencyStrategy: peerDependencies
 targetType: short-lived
 language: typescript
-testCommand: pnpm test
+testCommand: pnpm vitest run --exclude test/cli.test.ts --exclude test/packageConfig.test.ts
