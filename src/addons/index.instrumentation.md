@@ -11,4 +11,4 @@
 1. **Attempt 1**: 0 errors
 
 ## Notes
-- This file contains only an import and a re-export constant — there are no locally defined functions, classes, or async logic. Per the files-with-only-re-exports rule, the file is returned unchanged with no instrumentation added.
+- This file contains only an import and a re-export array — no locally defined functions, classes, or async logic. It is a pure pass-through aggregation file, so no instrumentation was added.
