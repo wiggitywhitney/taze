@@ -95,3 +95,13 @@ groups:
     stability: development
     brief: "Agent-discovered span: taze.yarn_workspace.write"
     span_kind: internal
+  - id: span.taze.fetch.npm
+    type: span
+    stability: development
+    brief: "Agent-discovered span: taze.fetch.npm"
+    span_kind: internal
+  - id: span.taze.fetch.jsr
+    type: span
+    stability: development
+    brief: "Agent-discovered span: taze.fetch.jsr"
+    span_kind: internal
