@@ -1,5 +1,6 @@
 import type { CAC } from 'cac'
 import type { CheckOptions, RangeMode } from './types'
+import { trace, SpanStatusCode } from '@opentelemetry/api'
 import process from 'node:process'
 import { cac } from 'cac'
 import restoreCursor from 'restore-cursor'
@@ -11,6 +12,7 @@ import { LOG_LEVELS, MODE_CHOICES } from './constants'
 import { SORT_CHOICES } from './utils/sort'
 
 const cli: CAC = cac('taze')
+const tracer = trace.getTracer('taze')
 
 cli
   .command('[mode]', `Update mode (version range to check). Available: ${MODE_CHOICES.join(' | ')}`)
@@ -39,27 +41,47 @@ cli
   .option('--maturity-period [days]', 'wait period in days before upgrading to newly released packages (default: 7 when flag is used, 0 when not used)')
   .option('--concurrency <requests>', 'number of concurrent requests when resolving dependencies', { default: 10 })
   .action(async (mode: RangeMode | undefined, options: Partial<CheckOptions>) => {
-    if (mode) {
-      if (!MODE_CHOICES.includes(mode)) {
-        console.error(`Invalid mode: ${mode}. Please use one of the following: ${MODE_CHOICES.join(' | ')}`)
-        process.exit(1)
+    return tracer.startActiveSpan('taze.cli.action', async (span) => {
+      try {
+        if (mode) {
+          if (!MODE_CHOICES.includes(mode)) {
+            console.error(`Invalid mode: ${mode}. Please use one of the following: ${MODE_CHOICES.join(' | ')}`)
+            process.exit(1)
+          }
+          options.mode = mode
+        }
+
+        if ('maturityPeriod' in options && typeof options.maturityPeriod !== 'number') {
+          options.maturityPeriod = 7
+        }
+
+        const resolved = await resolveConfig(options)
+
+        if (options.mode != null) {
+          span.setAttribute('taze.check.mode', options.mode)
+        }
+        if (options.recursive != null) {
+          span.setAttribute('taze.check.recursive', options.recursive)
+        }
+        if (options.write != null) {
+          span.setAttribute('taze.check.write_mode', options.write)
+        }
+
+        let exitCode
+        if (options.global)
+          exitCode = await checkGlobal(resolved)
+        else
+          exitCode = await check(resolved)
+
+        process.exit(exitCode)
+      } catch (error) {
+        span.recordException(error instanceof Error ? error : new Error(String(error)))
+        span.setStatus({ code: SpanStatusCode.ERROR })
+        throw error
+      } finally {
+        span.end()
       }
-      options.mode = mode
-    }
-
-    if ('maturityPeriod' in options && typeof options.maturityPeriod !== 'number') {
-      options.maturityPeriod = 7
-    }
-
-    const resolved = await resolveConfig(options)
-
-    let exitCode
-    if (options.global)
-      exitCode = await checkGlobal(resolved)
-    else
-      exitCode = await check(resolved)
-
-    process.exit(exitCode)
+    })
   })
 
 cli.help()
