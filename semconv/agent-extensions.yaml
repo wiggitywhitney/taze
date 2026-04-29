@@ -19,3 +19,8 @@ groups:
     stability: development
     brief: "Agent-discovered span: taze.command.check"
     span_kind: internal
+  - id: span.taze.command.interactive
+    type: span
+    stability: development
+    brief: "Agent-discovered span: taze.command.interactive"
+    span_kind: internal
