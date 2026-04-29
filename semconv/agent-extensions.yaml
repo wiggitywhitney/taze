@@ -16,6 +16,10 @@ groups:
         type: int
         stability: development
         brief: "Agent-discovered attribute: taze.pnpm_workspace.catalogs_count"
+      - id: taze.yarn_workspace.catalogs_count
+        type: int
+        stability: development
+        brief: "Agent-discovered attribute: taze.yarn_workspace.catalogs_count"
   - id: span.taze.check
     type: span
     stability: development
@@ -80,4 +84,14 @@ groups:
     type: span
     stability: development
     brief: "Agent-discovered span: taze.pnpm_workspace.write"
+    span_kind: internal
+  - id: span.taze.yarn_workspace.load
+    type: span
+    stability: development
+    brief: "Agent-discovered span: taze.yarn_workspace.load"
+    span_kind: internal
+  - id: span.taze.yarn_workspace.write
+    type: span
+    stability: development
+    brief: "Agent-discovered span: taze.yarn_workspace.write"
     span_kind: internal
