@@ -5,10 +5,10 @@
 - **Spans added**: 0
 - **Attempts**: 1 (initial-generation)
 - **Input tokens**: 0.1K
-- **Output tokens**: 0.1K
+- **Output tokens**: 0.2K
 
 ## Validation Journey
 1. **Attempt 1**: 0 errors
 
 ## Notes
-- This file contains only an import and a re-export array constant with no locally defined functions, classes, or async logic — no instrumentation was added.
+- This file contains only an import and a re-export constant — there are no locally defined functions, classes, or async logic. Per the files-with-only-re-exports rule, the file is returned unchanged with no instrumentation added.
