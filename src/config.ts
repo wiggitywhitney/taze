@@ -1,3 +1,4 @@
+import { trace, SpanStatusCode } from '@opentelemetry/api'
 import type { CommonOptions } from './types'
 import process from 'node:process'
 import { toArray } from '@antfu/utils'
@@ -7,6 +8,7 @@ import { createConfigLoader } from 'unconfig'
 import { DEFAULT_CHECK_OPTIONS } from './constants'
 
 const debug = _debug('taze:config')
+const tracer = trace.getTracer('taze')
 
 function normalizeConfig(options: CommonOptions) {
   // interop
@@ -26,34 +28,49 @@ function normalizeConfig(options: CommonOptions) {
 export async function resolveConfig(
   options: CommonOptions,
 ): Promise<CommonOptions> {
-  const defaults = DEFAULT_CHECK_OPTIONS
-  options = normalizeConfig(options)
+  return tracer.startActiveSpan('taze.config.resolve', async (span) => {
+    try {
+      const defaults = DEFAULT_CHECK_OPTIONS
+      options = normalizeConfig(options)
 
-  const loader = createConfigLoader<CommonOptions>({
-    sources: [
-      {
-        files: [
-          'taze.config',
+      if (options.recursive != null)
+        span.setAttribute('taze.check.recursive', options.recursive)
+
+      const loader = createConfigLoader<CommonOptions>({
+        sources: [
+          {
+            files: [
+              'taze.config',
+            ],
+          },
+          {
+            files: [
+              '.tazerc',
+            ],
+            extensions: ['json', ''],
+          },
         ],
-      },
-      {
-        files: [
-          '.tazerc',
-        ],
-        extensions: ['json', ''],
-      },
-    ],
-    cwd: options.cwd || process.cwd(),
-    merge: false,
+        cwd: options.cwd || process.cwd(),
+        merge: false,
+      })
+
+      const config = await loader.load()
+
+      if (!config.sources.length)
+        return deepmerge(defaults, options)
+
+      debug(`config file found ${config.sources[0]}`)
+      const configOptions = normalizeConfig(config.config)
+
+      return deepmerge(deepmerge(defaults, configOptions), options)
+    }
+    catch (error) {
+      span.recordException(error instanceof Error ? error : new Error(String(error)))
+      span.setStatus({ code: SpanStatusCode.ERROR })
+      throw error
+    }
+    finally {
+      span.end()
+    }
   })
-
-  const config = await loader.load()
-
-  if (!config.sources.length)
-    return deepmerge(defaults, options)
-
-  debug(`config file found ${config.sources[0]}`)
-  const configOptions = normalizeConfig(config.config)
-
-  return deepmerge(deepmerge(defaults, configOptions), options)
 }
