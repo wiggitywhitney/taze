@@ -1,0 +1,6 @@
+groups:
+  - id: span.taze.check
+    type: span
+    stability: development
+    brief: "Agent-discovered span: taze.check"
+    span_kind: internal
