@@ -4,3 +4,8 @@ groups:
     stability: development
     brief: "Agent-discovered span: taze.check.packages"
     span_kind: internal
+  - id: span.taze.cli.run
+    type: span
+    stability: development
+    brief: "Agent-discovered span: taze.cli.run"
+    span_kind: internal
