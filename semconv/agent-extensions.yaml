@@ -52,3 +52,18 @@ groups:
     stability: development
     brief: "Agent-discovered span: taze.bun_workspace.write"
     span_kind: internal
+  - id: span.taze.package.write
+    type: span
+    stability: development
+    brief: "Agent-discovered span: taze.package.write"
+    span_kind: internal
+  - id: span.taze.package.load
+    type: span
+    stability: development
+    brief: "Agent-discovered span: taze.package.load"
+    span_kind: internal
+  - id: span.taze.packages.load
+    type: span
+    stability: development
+    brief: "Agent-discovered span: taze.packages.load"
+    span_kind: internal
