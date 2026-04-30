@@ -5,11 +5,11 @@
 - **Spans added**: 0
 - **Attempts**: 1 (initial-generation)
 - **Input tokens**: 0.4K
-- **Output tokens**: 1.1K
-- **Cached tokens**: 14.7K
+- **Output tokens**: 0.9K
+- **Cached tokens**: 17.7K
 
 ## Validation Journey
 1. **Attempt 1**: 0 errors
 
 ## Notes
-- beforeWrite is the only function in this file. It is fully synchronous, performs no I/O, no network calls, and no disk access — only in-memory semver comparisons and string mutation on the pkg object passed in. RST-001 (no spans on pure synchronous data transformations) applies, so no instrumentation was added.
+- The only function in this file is `beforeWrite` on the `addonVSCode` addon object. It is synchronous, performs purely in-memory operations (version string comparisons and a property mutation on the pkg argument), and makes no I/O, network, or disk calls — so it is skipped per RST-001 (no spans on synchronous utilities with no I/O). The file is returned unchanged.
