@@ -4,66 +4,33 @@ groups:
     display_name: Agent-Created Attributes
     brief: Attributes created by the instrumentation agent
     attributes:
-      - id: taze.config.sources_count
-        type: int
+      - id: taze.cache.loaded
+        type: string
         stability: development
-        brief: "Agent-discovered attribute: taze.config.sources_count"
-      - id: taze.bun_workspace.catalogs_count
-        type: int
+        brief: "Agent-discovered attribute: taze.cache.loaded"
+      - id: taze.cache.changed
+        type: string
         stability: development
-        brief: "Agent-discovered attribute: taze.bun_workspace.catalogs_count"
-      - id: taze.pnpm_workspace.catalogs_count
-        type: int
-        stability: development
-        brief: "Agent-discovered attribute: taze.pnpm_workspace.catalogs_count"
-      - id: taze.yarn_workspace.catalogs_count
-        type: int
-        stability: development
-        brief: "Agent-discovered attribute: taze.yarn_workspace.catalogs_count"
-  - id: span.taze.check
+        brief: "Agent-discovered attribute: taze.cache.changed"
+  - id: span.taze.cache.load
     type: span
     stability: development
-    brief: "Agent-discovered span: taze.check"
+    brief: "Agent-discovered span: taze.cache.load"
     span_kind: internal
-  - id: span.taze.cli.action
+  - id: span.taze.cache.dump
     type: span
     stability: development
-    brief: "Agent-discovered span: taze.cli.action"
+    brief: "Agent-discovered span: taze.cache.dump"
     span_kind: internal
-  - id: span.taze.check.global
+  - id: span.taze.package.resolve
     type: span
     stability: development
-    brief: "Agent-discovered span: taze.check.global"
+    brief: "Agent-discovered span: taze.package.resolve"
     span_kind: internal
-  - id: span.taze.check.command
+  - id: span.taze.package.check
     type: span
     stability: development
-    brief: "Agent-discovered span: taze.check.command"
-    span_kind: internal
-  - id: span.taze.check.interactive
-    type: span
-    stability: development
-    brief: "Agent-discovered span: taze.check.interactive"
-    span_kind: internal
-  - id: span.taze.config.resolve
-    type: span
-    stability: development
-    brief: "Agent-discovered span: taze.config.resolve"
-    span_kind: internal
-  - id: span.taze.bun_workspace.load
-    type: span
-    stability: development
-    brief: "Agent-discovered span: taze.bun_workspace.load"
-    span_kind: internal
-  - id: span.taze.bun_workspace.write
-    type: span
-    stability: development
-    brief: "Agent-discovered span: taze.bun_workspace.write"
-    span_kind: internal
-  - id: span.taze.package.write
-    type: span
-    stability: development
-    brief: "Agent-discovered span: taze.package.write"
+    brief: "Agent-discovered span: taze.package.check"
     span_kind: internal
   - id: span.taze.package.load
     type: span
@@ -74,34 +41,4 @@ groups:
     type: span
     stability: development
     brief: "Agent-discovered span: taze.packages.load"
-    span_kind: internal
-  - id: span.taze.pnpm_workspace.load
-    type: span
-    stability: development
-    brief: "Agent-discovered span: taze.pnpm_workspace.load"
-    span_kind: internal
-  - id: span.taze.pnpm_workspace.write
-    type: span
-    stability: development
-    brief: "Agent-discovered span: taze.pnpm_workspace.write"
-    span_kind: internal
-  - id: span.taze.yarn_workspace.load
-    type: span
-    stability: development
-    brief: "Agent-discovered span: taze.yarn_workspace.load"
-    span_kind: internal
-  - id: span.taze.yarn_workspace.write
-    type: span
-    stability: development
-    brief: "Agent-discovered span: taze.yarn_workspace.write"
-    span_kind: internal
-  - id: span.taze.fetch.npm
-    type: span
-    stability: development
-    brief: "Agent-discovered span: taze.fetch.npm"
-    span_kind: internal
-  - id: span.taze.fetch.jsr
-    type: span
-    stability: development
-    brief: "Agent-discovered span: taze.fetch.jsr"
     span_kind: internal
