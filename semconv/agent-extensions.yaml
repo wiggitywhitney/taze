@@ -14,3 +14,8 @@ groups:
     stability: development
     brief: "Agent-discovered span: taze.check_global"
     span_kind: internal
+  - id: span.taze.check.run
+    type: span
+    stability: development
+    brief: "Agent-discovered span: taze.check.run"
+    span_kind: internal
