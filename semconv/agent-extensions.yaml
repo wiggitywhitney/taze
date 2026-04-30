@@ -8,6 +8,10 @@ groups:
         type: string
         stability: development
         brief: "Agent-discovered attribute: taze.config.found"
+      - id: taze.package_json.filepath
+        type: string
+        stability: development
+        brief: "Agent-discovered attribute: taze.package_json.filepath"
   - id: span.taze.check_packages
     type: span
     stability: development
@@ -47,4 +51,14 @@ groups:
     type: span
     stability: development
     brief: "Agent-discovered span: taze.bun_workspace.write"
+    span_kind: internal
+  - id: span.taze.package_json.load
+    type: span
+    stability: development
+    brief: "Agent-discovered span: taze.package_json.load"
+    span_kind: internal
+  - id: span.taze.package_json.write
+    type: span
+    stability: development
+    brief: "Agent-discovered span: taze.package_json.write"
     span_kind: internal
