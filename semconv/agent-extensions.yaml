@@ -1,4 +1,13 @@
 groups:
+  - id: registry.taze.agent_extensions
+    type: attribute_group
+    display_name: Agent-Created Attributes
+    brief: Attributes created by the instrumentation agent
+    attributes:
+      - id: taze.config.found
+        type: string
+        stability: development
+        brief: "Agent-discovered attribute: taze.config.found"
   - id: span.taze.check_packages
     type: span
     stability: development
@@ -23,4 +32,9 @@ groups:
     type: span
     stability: development
     brief: "Agent-discovered span: taze.check.interactive"
+    span_kind: internal
+  - id: span.taze.config.resolve
+    type: span
+    stability: development
+    brief: "Agent-discovered span: taze.config.resolve"
     span_kind: internal
