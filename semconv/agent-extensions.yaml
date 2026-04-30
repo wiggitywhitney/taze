@@ -1,0 +1,44 @@
+groups:
+  - id: registry.taze.agent_extensions
+    type: attribute_group
+    display_name: Agent-Created Attributes
+    brief: Attributes created by the instrumentation agent
+    attributes:
+      - id: taze.cache.loaded
+        type: string
+        stability: development
+        brief: "Agent-discovered attribute: taze.cache.loaded"
+      - id: taze.cache.changed
+        type: string
+        stability: development
+        brief: "Agent-discovered attribute: taze.cache.changed"
+  - id: span.taze.cache.load
+    type: span
+    stability: development
+    brief: "Agent-discovered span: taze.cache.load"
+    span_kind: internal
+  - id: span.taze.cache.dump
+    type: span
+    stability: development
+    brief: "Agent-discovered span: taze.cache.dump"
+    span_kind: internal
+  - id: span.taze.package.resolve
+    type: span
+    stability: development
+    brief: "Agent-discovered span: taze.package.resolve"
+    span_kind: internal
+  - id: span.taze.package.check
+    type: span
+    stability: development
+    brief: "Agent-discovered span: taze.package.check"
+    span_kind: internal
+  - id: span.taze.package.load
+    type: span
+    stability: development
+    brief: "Agent-discovered span: taze.package.load"
+    span_kind: internal
+  - id: span.taze.packages.load
+    type: span
+    stability: development
+    brief: "Agent-discovered span: taze.packages.load"
+    span_kind: internal

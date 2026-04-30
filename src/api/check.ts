@@ -1,8 +1,11 @@
+import { trace, SpanStatusCode } from '@opentelemetry/api'
 import type { CheckOptions, DependencyFilter, DependencyResolvedCallback, PackageMeta, RawDep } from '../types'
 import { newQueue } from '@henrygd/queue'
 import { loadPackages, writePackage } from '../io/packages'
 import { dumpCache, loadCache, resolvePackage } from '../io/resolves'
 import { queueContext } from '../utils/context'
+
+const tracer = trace.getTracer('taze')
 
 export interface CheckEventCallbacks {
   afterPackagesLoaded?: (pkgs: PackageMeta[]) => void
@@ -15,47 +18,69 @@ export interface CheckEventCallbacks {
 }
 
 export async function CheckPackages(options: CheckOptions, callbacks: CheckEventCallbacks = {}) {
-  if (!options.force)
-    await loadCache()
+  return tracer.startActiveSpan('taze.check', async (span) => {
+    try {
+      if (options.mode != null)
+        span.setAttribute('taze.check.mode', options.mode)
+      if (options.recursive != null)
+        span.setAttribute('taze.check.recursive', options.recursive)
+      if (options.write != null)
+        span.setAttribute('taze.check.write_mode', options.write)
 
-  // packages loading
-  const packages = await loadPackages(options)
-  callbacks.afterPackagesLoaded?.(packages)
+      if (!options.force)
+        await loadCache()
 
-  const privatePackageNames = packages
-    .filter(i => i.private)
-    .map(i => i.name)
-    .filter(i => i)
+      // packages loading
+      const packages = await loadPackages(options)
+      callbacks.afterPackagesLoaded?.(packages)
 
-  // to filter out private dependency in monorepo
-  const filter = (dep: RawDep) => !privatePackageNames.includes(dep.name)
+      const privatePackageNames = packages
+        .filter(i => i.private)
+        .map(i => i.name)
+        .filter(i => i)
 
-  let resolvedCount = 0
-  const onDependencyResolved: DependencyResolvedCallback = (pkgName, name, progress, total) => {
-    resolvedCount++
-    callbacks.onDependencyResolved?.(pkgName, name, resolvedCount, total)
-  }
+      // to filter out private dependency in monorepo
+      const filter = (dep: RawDep) => !privatePackageNames.includes(dep.name)
 
-  const queue = newQueue(options.concurrency || 10)
+      let resolvedCount = 0
+      const onDependencyResolved: DependencyResolvedCallback = (pkgName, name, progress, total) => {
+        resolvedCount++
+        callbacks.onDependencyResolved?.(pkgName, name, resolvedCount, total)
+      }
 
-  await queueContext.run(queue, () => {
-    // run all CheckSingleProject in parallel
-    // the actual resolveDependencies within CheckSingleProject -> resolvePackage -> resolveDependencies is
-    // actually limited by the queueContext/queue, so it won't overwhelm the npm meta server.
-    return Promise.all(packages.map(async (pkg) => {
-      callbacks.beforePackageStart?.(pkg)
-      await CheckSingleProject(pkg, options, filter, { ...callbacks, onDependencyResolved })
-      callbacks.afterPackageEnd?.(pkg)
-    }))
+      const queue = newQueue(options.concurrency || 10)
+
+      await queueContext.run(queue, () => {
+        // run all CheckSingleProject in parallel
+        // the actual resolveDependencies within CheckSingleProject -> resolvePackage -> resolveDependencies is
+        // actually limited by the queueContext/queue, so it won't overwhelm the npm meta server.
+        return Promise.all(packages.map(async (pkg) => {
+          callbacks.beforePackageStart?.(pkg)
+          await CheckSingleProject(pkg, options, filter, { ...callbacks, onDependencyResolved })
+          callbacks.afterPackageEnd?.(pkg)
+        }))
+      })
+
+      callbacks.afterPackagesEnd?.(packages)
+
+      await dumpCache()
+
+      const packagesTotal = packages.reduce((sum, pkg) => sum + (pkg.resolved?.length ?? 0), 0)
+      const packagesOutdated = packages.reduce((sum, pkg) => sum + (pkg.resolved?.filter(d => d.update).length ?? 0), 0)
+      span.setAttribute('taze.check.packages_total', packagesTotal)
+      span.setAttribute('taze.check.packages_outdated', packagesOutdated)
+
+      return {
+        packages,
+      }
+    } catch (error) {
+      span.recordException(error instanceof Error ? error : new Error(String(error)))
+      span.setStatus({ code: SpanStatusCode.ERROR })
+      throw error
+    } finally {
+      span.end()
+    }
   })
-
-  callbacks.afterPackagesEnd?.(packages)
-
-  await dumpCache()
-
-  return {
-    packages,
-  }
 }
 
 async function CheckSingleProject(pkg: PackageMeta, options: CheckOptions, filter: DependencyFilter = () => true, callbacks: CheckEventCallbacks = {}) {
