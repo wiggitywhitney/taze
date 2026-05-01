@@ -4,3 +4,13 @@ groups:
     stability: development
     brief: "Agent-discovered span: taze.check.run"
     span_kind: internal
+  - id: span.taze.io.read_package_json
+    type: span
+    stability: development
+    brief: "Agent-discovered span: taze.io.read_package_json"
+    span_kind: internal
+  - id: span.taze.io.write_package_json
+    type: span
+    stability: development
+    brief: "Agent-discovered span: taze.io.write_package_json"
+    span_kind: internal
