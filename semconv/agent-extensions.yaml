@@ -38,3 +38,13 @@ groups:
     stability: development
     brief: "Agent-discovered span: taze.config.resolve"
     span_kind: internal
+  - id: span.taze.bun.load_workspace
+    type: span
+    stability: development
+    brief: "Agent-discovered span: taze.bun.load_workspace"
+    span_kind: internal
+  - id: span.taze.bun.write_workspace
+    type: span
+    stability: development
+    brief: "Agent-discovered span: taze.bun.write_workspace"
+    span_kind: internal
