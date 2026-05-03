@@ -146,3 +146,13 @@ groups:
     stability: development
     brief: "Agent-discovered span: taze.check.resolve_package"
     span_kind: internal
+  - id: span.taze.yarnrc.load
+    type: span
+    stability: development
+    brief: "Agent-discovered span: taze.yarnrc.load"
+    span_kind: internal
+  - id: span.taze.yarnrc.write
+    type: span
+    stability: development
+    brief: "Agent-discovered span: taze.yarnrc.write"
+    span_kind: internal
