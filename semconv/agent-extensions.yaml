@@ -8,6 +8,14 @@ groups:
         type: string
         stability: development
         brief: "Agent-discovered attribute: taze.config.sources_found"
+      - id: taze.cache.hit
+        type: string
+        stability: development
+        brief: "Agent-discovered attribute: taze.cache.hit"
+      - id: taze.cache.changed
+        type: string
+        stability: development
+        brief: "Agent-discovered attribute: taze.cache.changed"
   - id: span.taze.check.run
     type: span
     stability: development
@@ -107,4 +115,34 @@ groups:
     type: span
     stability: development
     brief: "Agent-discovered span: taze.pnpm_workspace.write"
+    span_kind: internal
+  - id: span.taze.io.load_cache
+    type: span
+    stability: development
+    brief: "Agent-discovered span: taze.io.load_cache"
+    span_kind: internal
+  - id: span.taze.io.dump_cache
+    type: span
+    stability: development
+    brief: "Agent-discovered span: taze.io.dump_cache"
+    span_kind: internal
+  - id: span.taze.fetch.package_data
+    type: span
+    stability: development
+    brief: "Agent-discovered span: taze.fetch.package_data"
+    span_kind: internal
+  - id: span.taze.check.resolve_dependency
+    type: span
+    stability: development
+    brief: "Agent-discovered span: taze.check.resolve_dependency"
+    span_kind: internal
+  - id: span.taze.check.resolve_dependencies
+    type: span
+    stability: development
+    brief: "Agent-discovered span: taze.check.resolve_dependencies"
+    span_kind: internal
+  - id: span.taze.check.resolve_package
+    type: span
+    stability: development
+    brief: "Agent-discovered span: taze.check.resolve_package"
     span_kind: internal
