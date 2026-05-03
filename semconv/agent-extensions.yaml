@@ -156,3 +156,13 @@ groups:
     stability: development
     brief: "Agent-discovered span: taze.yarnrc.write"
     span_kind: internal
+  - id: span.taze.fetch.npm_package
+    type: span
+    stability: development
+    brief: "Agent-discovered span: taze.fetch.npm_package"
+    span_kind: internal
+  - id: span.taze.fetch.jsr_package
+    type: span
+    stability: development
+    brief: "Agent-discovered span: taze.fetch.jsr_package"
+    span_kind: internal
