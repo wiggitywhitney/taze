@@ -1,3 +1,4 @@
+import { trace, SpanStatusCode } from '@opentelemetry/api'
 import type { SemVer } from 'semver-es'
 import type { CheckOptions, DependencyFilter, DependencyResolvedCallback, DiffType, PackageData, PackageMeta, Protocol, RangeMode, RawDep, ResolvedDepChange } from '../types'
 import { existsSync, promises as fs, lstatSync } from 'node:fs'
@@ -14,6 +15,8 @@ import { parsePnpmPackagePath, parseYarnPackagePath } from '../utils/package'
 import { fetchJsrPackageMeta, fetchPackage } from '../utils/packument'
 
 import { filterDeprecatedVersions, filterVersionsByMaturityPeriod, getMaxSatisfying, getPrefixedVersion } from '../utils/versions'
+
+const tracer = trace.getTracer('taze')
 
 const debug = {
   cache: _debug('taze:cache'),
@@ -36,63 +39,98 @@ function ttl(n: number) {
 }
 
 export async function loadCache() {
-  if (existsSync(cachePath) && ttl(lstatSync(cachePath).mtimeMs) < cacheTTL) {
-    debug.cache(`cache loaded from ${cachePath}`)
-    cache = JSON.parse(await fs.readFile(cachePath, 'utf-8'))
-  }
-  else {
-    debug.cache('no cache found')
-  }
+  return tracer.startActiveSpan('taze.io.load_cache', async (span) => {
+    try {
+      if (existsSync(cachePath) && ttl(lstatSync(cachePath).mtimeMs) < cacheTTL) {
+        debug.cache(`cache loaded from ${cachePath}`)
+        cache = JSON.parse(await fs.readFile(cachePath, 'utf-8'))
+        span.setAttribute('taze.cache.hit', true)
+      }
+      else {
+        debug.cache('no cache found')
+        span.setAttribute('taze.cache.hit', false)
+      }
+    }
+    catch (error) {
+      span.recordException(error instanceof Error ? error : new Error(String(error)))
+      span.setStatus({ code: SpanStatusCode.ERROR })
+      throw error
+    }
+    finally {
+      span.end()
+    }
+  })
 }
 
 export async function dumpCache() {
-  if (!cacheChanged)
-    return
-  try {
-    await fs.mkdir(cacheDir, { recursive: true })
-    await fs.writeFile(cachePath, JSON.stringify(cache), 'utf-8')
-    debug.cache(`cache saved to ${cachePath}`)
-  }
-  catch (err) {
-    console.warn('Failed to save cache')
-    console.warn(err)
-  }
+  return tracer.startActiveSpan('taze.io.dump_cache', async (span) => {
+    span.setAttribute('taze.cache.changed', cacheChanged)
+    try {
+      if (!cacheChanged)
+        return
+      try {
+        await fs.mkdir(cacheDir, { recursive: true })
+        await fs.writeFile(cachePath, JSON.stringify(cache), 'utf-8')
+        debug.cache(`cache saved to ${cachePath}`)
+      }
+      catch (err) {
+        console.warn('Failed to save cache')
+        console.warn(err)
+      }
+    }
+    finally {
+      span.end()
+    }
+  })
 }
 
 export async function getPackageData(name: string, protocol: Protocol = 'npm'): Promise<PackageData> {
-  let error: any
-  const cacheName = `${protocol}:${name}`
+  return tracer.startActiveSpan('taze.fetch.package_data', async (span) => {
+    span.setAttribute('taze.package.name', name)
+    span.setAttribute('taze.fetch.registry', protocol)
+    let error: any
+    const cacheName = `${protocol}:${name}`
 
-  if (cache[cacheName]) {
-    if (ttl(cache[cacheName].cacheTime) < cacheTTL) {
-      debug.cache(`cache hit for ${cacheName}`)
-      return cache[cacheName].data
+    try {
+      if (cache[cacheName]) {
+        if (ttl(cache[cacheName].cacheTime) < cacheTTL) {
+          debug.cache(`cache hit for ${cacheName}`)
+          return cache[cacheName].data
+        }
+        else {
+          delete cache[cacheName]
+        }
+      }
+
+      try {
+        debug.resolve(`resolving ${cacheName}`)
+        const data = protocol === 'jsr' ? await fetchJsrPackageMeta(name) : await fetchPackage(name, false)
+
+        if (data) {
+          cache[cacheName] = { data, cacheTime: now() }
+          cacheChanged = true
+          return data
+        }
+      }
+      catch (e) {
+        error = e
+      }
+
+      const result = {
+        tags: {},
+        versions: [],
+        error: error?.statusCode?.toString() || error,
+        deprecated: {},
+      }
+      if (result.error != null) {
+        span.setAttribute('taze.fetch.error', String(result.error))
+      }
+      return result
     }
-    else {
-      delete cache[cacheName]
+    finally {
+      span.end()
     }
-  }
-
-  try {
-    debug.resolve(`resolving ${cacheName}`)
-    const data = protocol === 'jsr' ? await fetchJsrPackageMeta(name) : await fetchPackage(name, false)
-
-    if (data) {
-      cache[cacheName] = { data, cacheTime: now() }
-      cacheChanged = true
-      return data
-    }
-  }
-  catch (e) {
-    error = e
-  }
-
-  return {
-    tags: {},
-    versions: [],
-    error: error?.statusCode?.toString() || error,
-    deprecated: {},
-  }
+  })
 }
 
 export function getVersionOfRange(dep: ResolvedDepChange, range: RangeMode, options: CheckOptions) {
@@ -196,122 +234,140 @@ export async function resolveDependency(
   options: CheckOptions,
   filter: DependencyFilter = () => true,
 ) {
-  const dep = { ...raw } as ResolvedDepChange
-
-  const configMode = getPackageMode(dep.name, options)
-  const optionMode = options.mode
-  const mergeMode = configMode
-    ? (configMode === optionMode)
-        ? optionMode
-        : optionMode === 'default' ? configMode : 'ignore'
-    : optionMode
-  if (isLocalPackage(raw.currentVersion) || isUrlPackage(raw.currentVersion) || !raw.update || !await Promise.resolve(filter(raw)) || mergeMode === 'ignore') {
-    return {
-      ...raw,
-      diff: null,
-      targetVersion: raw.currentVersion,
-      update: false,
-    } as ResolvedDepChange
-  }
-  if (isAliasedPackage(raw.currentVersion)) {
-    const { name, version, protocol } = parseAliasedPackage(raw.currentVersion)
-    dep.name = name || dep.name
-    dep.currentVersion = version
-    dep.aliasName = raw.name
-    dep.protocol = protocol
-    if (!version) {
-      dep.diff = null
-      dep.targetVersion = version
-      dep.update = false
-      return dep
-    }
-  }
-
-  let resolvedName = dep.name
-
-  // manage Yarn resolutions (e.g. "foo@1/bar")
-  if (dep.source === 'resolutions') {
-    const packages = parseYarnPackagePath(dep.name)
-    resolvedName = packages.pop() ?? dep.name
-  }
-  // manage pnpm overrides (e.g. "foo@1>bar")
-  else if (dep.source === 'pnpm.overrides') {
-    const packages = parsePnpmPackagePath(dep.name)
-    resolvedName = packages.pop() ?? dep.name
-  }
-
-  const pkgData = await getPackageData(resolvedName, dep.protocol)
-  const { tags, error, deprecated } = pkgData
-
-  dep.pkgData = pkgData
-  let err: Error | string | null = null
-  let target: string | undefined
-
-  if (error == null) {
+  return tracer.startActiveSpan('taze.check.resolve_dependency', async (span) => {
+    span.setAttribute('taze.package.name', raw.name)
+    span.setAttribute('taze.package.current_version', raw.currentVersion)
     try {
-      if (deprecated && deprecated[dep.currentVersion]) {
-        dep.diff = null
-        dep.targetVersion = dep.currentVersion
-        dep.update = false
-        return dep
+      const dep = { ...raw } as ResolvedDepChange
+
+      const configMode = getPackageMode(dep.name, options)
+      const optionMode = options.mode
+      const mergeMode = configMode
+        ? (configMode === optionMode)
+            ? optionMode
+            : optionMode === 'default' ? configMode : 'ignore'
+        : optionMode
+      if (isLocalPackage(raw.currentVersion) || isUrlPackage(raw.currentVersion) || !raw.update || !await Promise.resolve(filter(raw)) || mergeMode === 'ignore') {
+        return {
+          ...raw,
+          diff: null,
+          targetVersion: raw.currentVersion,
+          update: false,
+        } as ResolvedDepChange
       }
-
-      target = getVersionOfRange(dep, mergeMode as RangeMode, options)
-
-      if (!target) {
-        dep.diff = null
-        dep.targetVersion = dep.currentVersion
-        dep.update = false
-        return dep
-      }
-    }
-    catch (e: any) {
-      err = e.message || e
-    }
-  }
-  else {
-    err = error
-  }
-
-  if (target)
-    updateTargetVersion(dep, target, undefined, options.includeLocked)
-  else
-    dep.targetVersion = dep.currentVersion
-
-  if (dep.targetVersion === dep.currentVersion) {
-    dep.diff = null
-    dep.update = false
-  }
-
-  try {
-    const targetVersion = minVersion(target || dep.targetVersion)
-    if (tags.latest && targetVersion && gt(tags.latest, targetVersion))
-      dep.latestVersionAvailable = tags.latest
-
-    const { nodecompat = true } = options
-    if (nodecompat) {
-      const currentNodeVersion = process.version
-      const { nodeSemver } = dep.pkgData
-      if (nodeSemver
-        && targetVersion?.version
-        && targetVersion?.version in nodeSemver) {
-        dep.nodeCompatibleVersion = {
-          compatible: satisfies(currentNodeVersion, nodeSemver[targetVersion?.version]),
-          semver: nodeSemver[targetVersion?.version],
+      if (isAliasedPackage(raw.currentVersion)) {
+        const { name, version, protocol } = parseAliasedPackage(raw.currentVersion)
+        dep.name = name || dep.name
+        dep.currentVersion = version
+        dep.aliasName = raw.name
+        dep.protocol = protocol
+        if (!version) {
+          dep.diff = null
+          dep.targetVersion = version
+          dep.update = false
+          return dep
         }
       }
+
+      let resolvedName = dep.name
+
+      // manage Yarn resolutions (e.g. "foo@1/bar")
+      if (dep.source === 'resolutions') {
+        const packages = parseYarnPackagePath(dep.name)
+        resolvedName = packages.pop() ?? dep.name
+      }
+      // manage pnpm overrides (e.g. "foo@1>bar")
+      else if (dep.source === 'pnpm.overrides') {
+        const packages = parsePnpmPackagePath(dep.name)
+        resolvedName = packages.pop() ?? dep.name
+      }
+
+      const pkgData = await getPackageData(resolvedName, dep.protocol)
+      const { tags, error, deprecated } = pkgData
+
+      dep.pkgData = pkgData
+      let err: Error | string | null = null
+      let target: string | undefined
+
+      if (error == null) {
+        try {
+          if (deprecated && deprecated[dep.currentVersion]) {
+            dep.diff = null
+            dep.targetVersion = dep.currentVersion
+            dep.update = false
+            return dep
+          }
+
+          target = getVersionOfRange(dep, mergeMode as RangeMode, options)
+
+          if (!target) {
+            dep.diff = null
+            dep.targetVersion = dep.currentVersion
+            dep.update = false
+            return dep
+          }
+        }
+        catch (e: any) {
+          err = e.message || e
+        }
+      }
+      else {
+        err = error
+      }
+
+      if (target)
+        updateTargetVersion(dep, target, undefined, options.includeLocked)
+      else
+        dep.targetVersion = dep.currentVersion
+
+      if (dep.targetVersion === dep.currentVersion) {
+        dep.diff = null
+        dep.update = false
+      }
+
+      try {
+        const targetVersion = minVersion(target || dep.targetVersion)
+        if (tags.latest && targetVersion && gt(tags.latest, targetVersion))
+          dep.latestVersionAvailable = tags.latest
+
+        const { nodecompat = true } = options
+        if (nodecompat) {
+          const currentNodeVersion = process.version
+          const { nodeSemver } = dep.pkgData
+          if (nodeSemver
+            && targetVersion?.version
+            && targetVersion?.version in nodeSemver) {
+            dep.nodeCompatibleVersion = {
+              compatible: satisfies(currentNodeVersion, nodeSemver[targetVersion?.version]),
+              semver: nodeSemver[targetVersion?.version],
+            }
+          }
+        }
+      }
+      catch {}
+
+      if (err) {
+        dep.diff = 'error'
+        dep.update = false
+        dep.resolveError = err
+        return dep
+      }
+
+      span.setAttribute('taze.package.update_available', dep.update)
+      if (dep.targetVersion != null) {
+        span.setAttribute('taze.package.latest_version', dep.targetVersion)
+      }
+      return dep
     }
-  }
-  catch {}
-
-  if (err) {
-    dep.diff = 'error'
-    dep.update = false
-    dep.resolveError = err
-    return dep
-  }
-
-  return dep
+    catch (error) {
+      span.recordException(error instanceof Error ? error : new Error(String(error)))
+      span.setStatus({ code: SpanStatusCode.ERROR })
+      throw error
+    }
+    finally {
+      span.end()
+    }
+  })
 }
 
 export async function resolveDependencies(
@@ -320,32 +376,64 @@ export async function resolveDependencies(
   filter: DependencyFilter = () => true,
   progressCallback: (name: string, counter: number, total: number) => void = () => {},
 ) {
-  const total = deps.length
-  let counter = 0
+  return tracer.startActiveSpan('taze.check.resolve_dependencies', async (span) => {
+    span.setAttribute('taze.check.packages_total', deps.length)
+    if (options.mode != null) {
+      span.setAttribute('taze.check.mode', options.mode)
+    }
+    try {
+      const total = deps.length
+      let counter = 0
 
-  const {
-    concurrency = 10,
-  } = options
+      const {
+        concurrency = 10,
+      } = options
 
-  // resolveDependencies may be called standalone without going through CheckPackages, so we need
-  // to fallback (that respects concurrency option) if it's not in the CheckPackages context.
-  const queue = queueContext.getStore() || newQueue(concurrency)
+      // resolveDependencies may be called standalone without going through CheckPackages, so we need
+      // to fallback (that respects concurrency option) if it's not in the CheckPackages context.
+      const queue = queueContext.getStore() || newQueue(concurrency)
 
-  return Promise.all(
-    deps.map(raw => queue.add(async () => {
-      const dep = await resolveDependency(raw, options, filter)
-      counter += 1
-      progressCallback(raw.name, counter, total)
-      return dep
-    })),
-  )
+      const result = await Promise.all(
+        deps.map(raw => queue.add(async () => {
+          const dep = await resolveDependency(raw, options, filter)
+          counter += 1
+          progressCallback(raw.name, counter, total)
+          return dep
+        })),
+      )
+      span.setAttribute('taze.check.packages_outdated', result.filter(d => d.update).length)
+      return result
+    }
+    catch (error) {
+      span.recordException(error instanceof Error ? error : new Error(String(error)))
+      span.setStatus({ code: SpanStatusCode.ERROR })
+      throw error
+    }
+    finally {
+      span.end()
+    }
+  })
 }
 
 export async function resolvePackage(pkg: PackageMeta, options: CheckOptions, filter?: DependencyFilter, progress?: DependencyResolvedCallback) {
-  const resolved = await resolveDependencies(pkg.deps, options, filter, (name, counter, total) => progress?.(pkg.name, name, counter, total))
-  diffSorter(resolved)
-  pkg.resolved = resolved
-  return pkg
+  return tracer.startActiveSpan('taze.check.resolve_package', async (span) => {
+    span.setAttribute('taze.package.name', pkg.name)
+    span.setAttribute('taze.check.packages_total', pkg.deps.length)
+    try {
+      const resolved = await resolveDependencies(pkg.deps, options, filter, (name, counter, total) => progress?.(pkg.name, name, counter, total))
+      diffSorter(resolved)
+      pkg.resolved = resolved
+      return pkg
+    }
+    catch (error) {
+      span.recordException(error instanceof Error ? error : new Error(String(error)))
+      span.setStatus({ code: SpanStatusCode.ERROR })
+      throw error
+    }
+    finally {
+      span.end()
+    }
+  })
 }
 
 export function isUrlPackage(currentVersion: string) {
