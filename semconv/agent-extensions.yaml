@@ -1,0 +1,21 @@
+groups:
+  - id: registry.taze.agent_extensions
+    type: attribute_group
+    display_name: Agent-Created Attributes
+    brief: Attributes created by the instrumentation agent
+    attributes:
+      - id: taze.config.sources_found
+        type: int
+        stability: development
+        brief: Number of configuration source files found during dependency resolution
+        examples:
+          - 1
+          - 3
+      - id: taze.cache.hit
+        type: boolean
+        stability: development
+        brief: Whether the package metadata was served from cache
+      - id: taze.cache.changed
+        type: boolean
+        stability: development
+        brief: Whether the cache entry was modified during this operation
