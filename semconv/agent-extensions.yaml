@@ -19,3 +19,8 @@ groups:
         type: boolean
         stability: development
         brief: Whether the cache entry was modified during this operation
+  - id: span.taze.check.run
+    type: span
+    stability: development
+    brief: "Agent-discovered span: taze.check.run"
+    span_kind: internal
