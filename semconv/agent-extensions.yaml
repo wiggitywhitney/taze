@@ -73,3 +73,13 @@ groups:
     stability: development
     brief: "Agent-discovered span: taze.io.write_bun_json"
     span_kind: internal
+  - id: span.taze.io.load_package_json
+    type: span
+    stability: development
+    brief: "Agent-discovered span: taze.io.load_package_json"
+    span_kind: internal
+  - id: span.taze.io.write_package_json
+    type: span
+    stability: development
+    brief: "Agent-discovered span: taze.io.write_package_json"
+    span_kind: internal
