@@ -19,6 +19,10 @@ groups:
         type: boolean
         stability: development
         brief: Whether the cache entry was modified during this operation
+      - id: taze.io.catalogs_found
+        type: string
+        stability: development
+        brief: "Agent-discovered attribute: taze.io.catalogs_found"
   - id: span.taze.check.global
     type: span
     stability: development
@@ -53,4 +57,19 @@ groups:
     type: span
     stability: development
     brief: "Agent-discovered span: taze.config.resolve"
+    span_kind: internal
+  - id: span.taze.io.load_bun_workspace
+    type: span
+    stability: development
+    brief: "Agent-discovered span: taze.io.load_bun_workspace"
+    span_kind: internal
+  - id: span.taze.io.write_bun_workspace
+    type: span
+    stability: development
+    brief: "Agent-discovered span: taze.io.write_bun_workspace"
+    span_kind: internal
+  - id: span.taze.io.write_bun_json
+    type: span
+    stability: development
+    brief: "Agent-discovered span: taze.io.write_bun_json"
     span_kind: internal
