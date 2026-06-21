@@ -91,3 +91,23 @@ groups:
     stability: development
     brief: "Agent-discovered span: taze.write.package_json"
     span_kind: internal
+  - id: span.taze.package.read_yaml
+    type: span
+    stability: development
+    brief: "Agent-discovered span: taze.package.read_yaml"
+    span_kind: internal
+  - id: span.taze.write.yaml
+    type: span
+    stability: development
+    brief: "Agent-discovered span: taze.write.yaml"
+    span_kind: internal
+  - id: span.taze.package.load_package_yaml
+    type: span
+    stability: development
+    brief: "Agent-discovered span: taze.package.load_package_yaml"
+    span_kind: internal
+  - id: span.taze.write.package_yaml
+    type: span
+    stability: development
+    brief: "Agent-discovered span: taze.write.package_yaml"
+    span_kind: internal
