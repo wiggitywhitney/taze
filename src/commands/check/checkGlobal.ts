@@ -1,3 +1,4 @@
+import { trace, SpanStatusCode } from '@opentelemetry/api'
 import type { CheckOptions, GlobalPackageMeta, RawDep } from '../../types'
 /* eslint-disable no-console */
 import { getCommand } from '@antfu/ni'
@@ -10,6 +11,8 @@ import { createMultiProgressBar } from '../../log'
 import { createDependenciesFilter } from '../../utils/dependenciesFilter'
 import { promptInteractive } from './interactive'
 import { outputErr, renderPackages } from './render'
+
+const tracer = trace.getTracer('taze')
 
 interface NpmOut {
   dependencies: {
@@ -29,165 +32,225 @@ interface PnpmOut {
 }
 
 export async function checkGlobal(options: CheckOptions) {
-  let exitCode = 0
-  let resolvePkgs: GlobalPackageMeta[] = []
+  return tracer.startActiveSpan('taze.check.global', async (span) => {
+    try {
+      let exitCode = 0
+      let resolvePkgs: GlobalPackageMeta[] = []
 
-  const globalPkgs = await Promise.all([
-    loadGlobalNpmPackage(options),
-    loadGlobalPnpmPackage(options),
-  ])
-  const pkgs = globalPkgs.flat(1)
+      if (options.mode != null) {
+        span.setAttribute('taze.check.mode', options.mode)
+      }
+      if (options.write != null) {
+        span.setAttribute('taze.check.write_mode', options.write)
+      }
 
-  const bars = options.loglevel === 'silent'
-    ? null
-    : createMultiProgressBar()
-  await Promise.all(pkgs.map(async (pkg) => {
-    const depBar = bars?.create(pkg.deps.length, 0, { type: c.green(pkg.agent) })
-    await resolvePackage(
-      pkg,
-      options,
-      () => true,
-      (_pkgName, name, progress) => depBar?.update(progress, { name }),
-    )
-  }))
-  bars?.stop()
+      const globalPkgs = await Promise.all([
+        loadGlobalNpmPackage(options),
+        loadGlobalPnpmPackage(options),
+      ])
+      const pkgs = globalPkgs.flat(1)
 
-  resolvePkgs = pkgs
+      const bars = options.loglevel === 'silent'
+        ? null
+        : createMultiProgressBar()
+      await Promise.all(pkgs.map(async (pkg) => {
+        const depBar = bars?.create(pkg.deps.length, 0, { type: c.green(pkg.agent) })
+        await resolvePackage(
+          pkg,
+          options,
+          () => true,
+          (_pkgName, name, progress) => depBar?.update(progress, { name }),
+        )
+      }))
+      bars?.stop()
 
-  if (options.interactive)
-    resolvePkgs = await promptInteractive(resolvePkgs, options) as GlobalPackageMeta[]
+      resolvePkgs = pkgs
 
-  const { lines, errLines } = renderPackages(resolvePkgs, options)
+      if (options.interactive)
+        resolvePkgs = await promptInteractive(resolvePkgs, options) as GlobalPackageMeta[]
 
-  const hasChanges = resolvePkgs.length && resolvePkgs.some(i => i.resolved.some(j => j.update))
-  if (!hasChanges) {
-    if (errLines.length)
-      outputErr(errLines)
-    else
-      console.log(c.green('dependencies are already up-to-date'))
+      const { lines, errLines } = renderPackages(resolvePkgs, options)
 
-    return exitCode
-  }
+      const hasChanges = resolvePkgs.length && resolvePkgs.some(i => i.resolved.some(j => j.update))
 
-  console.log(lines.join('\n'))
+      if (span.isRecording()) {
+        span.setAttribute('taze.check.packages_total', resolvePkgs.reduce((sum, p) => sum + p.deps.length, 0))
+      }
+      if (span.isRecording()) {
+        span.setAttribute('taze.check.packages_outdated', resolvePkgs.reduce((sum, p) => sum + p.resolved.filter(j => j.update).length, 0))
+      }
 
-  if (errLines.length)
-    outputErr(errLines)
+      if (!hasChanges) {
+        if (errLines.length)
+          outputErr(errLines)
+        else
+          console.log(c.green('dependencies are already up-to-date'))
 
-  if (options.interactive && !options.install) {
-    options.install = await prompts([
-      {
-        name: 'install',
-        type: 'confirm',
-        initial: true,
-        message: c.green('install now'),
-      },
-    ]).then(r => r.install)
-  }
+        return exitCode
+      }
 
-  if (!options.write) {
-    console.log()
+      console.log(lines.join('\n'))
 
-    if (options.mode === 'default')
-      console.log(`Add ${c.green('major')} to check major updates`)
+      if (errLines.length)
+        outputErr(errLines)
 
-    if (hasChanges) {
-      if (options.failOnOutdated)
-        exitCode = 1
+      if (options.interactive && !options.install) {
+        options.install = await prompts([
+          {
+            name: 'install',
+            type: 'confirm',
+            initial: true,
+            message: c.green('install now'),
+          },
+        ]).then(r => r.install)
+      }
 
-      console.log(`Add ${c.green('-i')} to update global dependency`)
+      if (!options.write) {
+        console.log()
+
+        if (options.mode === 'default')
+          console.log(`Add ${c.green('major')} to check major updates`)
+
+        if (hasChanges) {
+          if (options.failOnOutdated)
+            exitCode = 1
+
+          console.log(`Add ${c.green('-i')} to update global dependency`)
+        }
+
+        console.log()
+      }
+
+      if (options.install) {
+        console.log(c.magenta('installing...'))
+        console.log()
+
+        for (const pkg of resolvePkgs)
+          await installPkg(pkg)
+      }
+
+      return exitCode
+    } catch (error) {
+      span.recordException(error instanceof Error ? error : new Error(String(error)))
+      span.setStatus({ code: SpanStatusCode.ERROR })
+      throw error
+    } finally {
+      span.end()
     }
-
-    console.log()
-  }
-
-  if (options.install) {
-    console.log(c.magenta('installing...'))
-    console.log()
-
-    for (const pkg of resolvePkgs)
-      await installPkg(pkg)
-  }
-
-  return exitCode
+  })
 }
 
 async function loadGlobalPnpmPackage(options: CheckOptions): Promise<GlobalPackageMeta[]> {
-  let pnpmStdout
+  return tracer.startActiveSpan('taze.package.load_pnpm_global', async (span) => {
+    try {
+      let pnpmStdout
 
-  try {
-    pnpmStdout = (await exec('pnpm', ['ls', '--global', '--depth=0', '--json'], { throwOnError: true })).stdout
-  }
-  catch {
-    return []
-  }
+      try {
+        pnpmStdout = (await exec('pnpm', ['ls', '--global', '--depth=0', '--json'], { throwOnError: true })).stdout
+      }
+      catch {
+        return []
+      }
 
-  const pnpmOuts = (JSON.parse(pnpmStdout) as PnpmOut[]).filter(it => it.dependencies != null)
-  const filter = createDependenciesFilter(options.include, options.exclude)
+      const pnpmOuts = (JSON.parse(pnpmStdout) as PnpmOut[]).filter(it => it.dependencies != null)
+      span.setAttribute('taze.config.sources_found', pnpmOuts.length)
+      const filter = createDependenciesFilter(options.include, options.exclude)
 
-  const pkgMetas: GlobalPackageMeta[] = pnpmOuts.map(
-    pnpmOut => Object.entries(pnpmOut.dependencies)
-      .filter(([_name, i]) => i?.version)
-      .map(([name, i]) => ({
-        name,
-        currentVersion: `^${i.version}`,
-        update: filter(name),
-        source: 'dependencies',
-      } satisfies RawDep)),
-  )
-    .map((deps, i) => ({
-      agent: 'pnpm',
-      type: 'global',
-      private: true,
-      resolved: [],
-      raw: null,
-      version: '',
-      filepath: '',
-      relative: '',
-      deps,
-      name: c.red`pnpm` + c.gray.dim` (global) ` + c.gray.dim(pnpmOuts[i].path),
-    }))
+      const pkgMetas: GlobalPackageMeta[] = pnpmOuts.map(
+        pnpmOut => Object.entries(pnpmOut.dependencies)
+          .filter(([_name, i]) => i?.version)
+          .map(([name, i]) => ({
+            name,
+            currentVersion: `^${i.version}`,
+            update: filter(name),
+            source: 'dependencies',
+          } satisfies RawDep)),
+      )
+        .map((deps, i) => ({
+          agent: 'pnpm' as const,
+          type: 'global' as const,
+          private: true,
+          resolved: [],
+          raw: null,
+          version: '',
+          filepath: '',
+          relative: '',
+          deps,
+          name: c.red`pnpm` + c.gray.dim` (global) ` + c.gray.dim(pnpmOuts[i].path),
+        }))
 
-  return pkgMetas
+      return pkgMetas
+    } catch (error) {
+      span.recordException(error instanceof Error ? error : new Error(String(error)))
+      span.setStatus({ code: SpanStatusCode.ERROR })
+      throw error
+    } finally {
+      span.end()
+    }
+  })
 }
 
 async function loadGlobalNpmPackage(options: CheckOptions): Promise<GlobalPackageMeta> {
-  const { stdout } = await exec('npm', ['ls', '--global', '--depth=0', '--json'], { throwOnError: true })
-  const npmOut = JSON.parse(stdout) as NpmOut
-  const filter = createDependenciesFilter(options.include, options.exclude)
+  return tracer.startActiveSpan('taze.package.load_npm_global', async (span) => {
+    try {
+      span.setAttribute('taze.fetch.registry', 'npm')
+      const { stdout } = await exec('npm', ['ls', '--global', '--depth=0', '--json'], { throwOnError: true })
+      const npmOut = JSON.parse(stdout) as NpmOut
+      const filter = createDependenciesFilter(options.include, options.exclude)
 
-  let deps: RawDep[] = []
-  if ('dependencies' in npmOut) {
-    deps = Object.entries(npmOut.dependencies)
-      .filter(([_name, i]) => i?.version)
-      .map(([name, i]) => ({
-        name,
-        currentVersion: `^${i.version}`,
-        update: filter(name),
-        source: 'dependencies',
-      }))
-  }
+      let deps: RawDep[] = []
+      if ('dependencies' in npmOut) {
+        deps = Object.entries(npmOut.dependencies)
+          .filter(([_name, i]) => i?.version)
+          .map(([name, i]) => ({
+            name,
+            currentVersion: `^${i.version}`,
+            update: filter(name),
+            source: 'dependencies',
+          }))
+      }
 
-  return {
-    agent: 'npm',
-    private: true,
-    type: 'global',
-    resolved: [],
-    raw: null,
-    version: '',
-    filepath: '',
-    relative: '',
-    deps,
-    name: c.red`npm` + c.gray.dim` (global)`,
-  }
+      span.setAttribute('taze.package.deps_count', String(deps.length))
+
+      return {
+        agent: 'npm' as const,
+        private: true,
+        type: 'global' as const,
+        resolved: [],
+        raw: null,
+        version: '',
+        filepath: '',
+        relative: '',
+        deps,
+        name: c.red`npm` + c.gray.dim` (global)`,
+      }
+    } catch (error) {
+      span.recordException(error instanceof Error ? error : new Error(String(error)))
+      span.setStatus({ code: SpanStatusCode.ERROR })
+      throw error
+    } finally {
+      span.end()
+    }
+  })
 }
 
 async function installPkg(pkg: GlobalPackageMeta) {
-  const changes = pkg.resolved.filter(i => i.update)
-  if (!changes.length)
-    return
-  const dependencies = dumpDependencies(changes, 'dependencies')
-  const updateArgs = Object.entries(dependencies).map(([name, version]) => `${name}@${version}`)
-  const install = getCommand(pkg.agent, 'global', [...updateArgs])
-  await exec(install.command, install.args, { throwOnError: true })
+  return tracer.startActiveSpan('taze.package.install', async (span) => {
+    try {
+      const changes = pkg.resolved.filter(i => i.update)
+      if (!changes.length)
+        return
+      span.setAttribute('taze.write.changes_count', changes.length)
+      const dependencies = dumpDependencies(changes, 'dependencies')
+      const updateArgs = Object.entries(dependencies).map(([name, version]) => `${name}@${version}`)
+      const install = getCommand(pkg.agent, 'global', [...updateArgs])
+      await exec(install.command, install.args, { throwOnError: true })
+    } catch (error) {
+      span.recordException(error instanceof Error ? error : new Error(String(error)))
+      span.setStatus({ code: SpanStatusCode.ERROR })
+      throw error
+    } finally {
+      span.end()
+    }
+  })
 }

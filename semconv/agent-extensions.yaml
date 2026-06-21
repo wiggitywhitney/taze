@@ -19,3 +19,27 @@ groups:
         type: boolean
         stability: development
         brief: Whether the cache entry was modified during this operation
+      - id: taze.package.deps_count
+        type: int
+        stability: development
+        brief: "Agent-discovered attribute: taze.package.deps_count"
+  - id: span.taze.check.global
+    type: span
+    stability: development
+    brief: "Agent-discovered span: taze.check.global"
+    span_kind: internal
+  - id: span.taze.package.load_pnpm_global
+    type: span
+    stability: development
+    brief: "Agent-discovered span: taze.package.load_pnpm_global"
+    span_kind: internal
+  - id: span.taze.package.load_npm_global
+    type: span
+    stability: development
+    brief: "Agent-discovered span: taze.package.load_npm_global"
+    span_kind: internal
+  - id: span.taze.package.install
+    type: span
+    stability: development
+    brief: "Agent-discovered span: taze.package.install"
+    span_kind: internal
