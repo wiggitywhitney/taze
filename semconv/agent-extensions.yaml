@@ -196,3 +196,13 @@ groups:
     stability: development
     brief: "Agent-discovered span: taze.check.single_project"
     span_kind: internal
+  - id: span.taze.fetch.package
+    type: span
+    stability: development
+    brief: "Agent-discovered span: taze.fetch.package"
+    span_kind: internal
+  - id: span.taze.fetch.jsr_package
+    type: span
+    stability: development
+    brief: "Agent-discovered span: taze.fetch.jsr_package"
+    span_kind: internal
