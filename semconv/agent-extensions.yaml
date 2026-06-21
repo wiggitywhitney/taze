@@ -27,6 +27,10 @@ groups:
         type: int
         stability: development
         brief: "Agent-discovered attribute: taze.catalog.count"
+      - id: taze.package.file_path
+        type: string
+        stability: development
+        brief: "Agent-discovered attribute: taze.package.file_path"
   - id: span.taze.check.global
     type: span
     stability: development
@@ -76,4 +80,14 @@ groups:
     type: span
     stability: development
     brief: "Agent-discovered span: taze.write.bun_json"
+    span_kind: internal
+  - id: span.taze.package.load_package_json
+    type: span
+    stability: development
+    brief: "Agent-discovered span: taze.package.load_package_json"
+    span_kind: internal
+  - id: span.taze.write.package_json
+    type: span
+    stability: development
+    brief: "Agent-discovered span: taze.write.package_json"
     span_kind: internal

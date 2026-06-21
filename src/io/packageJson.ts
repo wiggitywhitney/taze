@@ -1,9 +1,12 @@
+import { trace, SpanStatusCode } from '@opentelemetry/api'
 import type { CommonOptions, DepType, PackageMeta, RawDep } from '../types'
 import { resolve } from 'pathe'
 import { builtinAddons } from '../addons'
 import { getHexHashFromIntegrity } from '../utils/sha'
 import { dumpDependencies, getByPath, parseDependencies, parseDependency, setByPath } from './dependencies'
 import { readJSON, writeJSON } from './packages'
+
+const tracer = trace.getTracer('taze')
 
 const allDepsFields = [
   'dependencies',
@@ -30,86 +33,117 @@ export async function loadPackageJSON(
   shouldUpdate: (name: string) => boolean,
   existingRaw?: Record<string, unknown>,
 ): Promise<PackageMeta[]> {
-  const filepath = resolve(options.cwd ?? '', relative)
-  const raw: Record<string, any> = existingRaw ?? await readJSON(filepath)
-  const deps: RawDep[] = []
+  return tracer.startActiveSpan('taze.package.load_package_json', async (span) => {
+    try {
+      const filepath = resolve(options.cwd ?? '', relative)
+      span.setAttribute('taze.package.file_path', relative)
+      const raw: Record<string, any> = existingRaw ?? await readJSON(filepath)
+      const deps: RawDep[] = []
 
-  for (const key of allDepsFields) {
-    if (!isDepFieldEnabled(key, options))
-      continue
+      for (const key of allDepsFields) {
+        if (!isDepFieldEnabled(key, options))
+          continue
 
-    if (key === 'packageManager') {
-      if (raw.packageManager) {
-        const [name, versionWithHash] = raw.packageManager.split('@')
-        // `+` sign can be used to pin the hash of the package manager, we remove it to be semver compatible.
-        const [version, hashPart] = versionWithHash.split('+')
-        const hexHash = hashPart?.split('.')[1]
-        deps.push(parseDependency({ name, version: `^${version}`, type: 'packageManager', shouldUpdate, hexHash }))
+        if (key === 'packageManager') {
+          if (raw.packageManager) {
+            const [name, versionWithHash] = raw.packageManager.split('@')
+            // `+` sign can be used to pin the hash of the package manager, we remove it to be semver compatible.
+            const [version, hashPart] = versionWithHash.split('+')
+            const hexHash = hashPart?.split('.')[1]
+            deps.push(parseDependency({ name, version: `^${version}`, type: 'packageManager', shouldUpdate, hexHash }))
+          }
+        }
+        else {
+          deps.push(...parseDependencies(raw, key, shouldUpdate))
+        }
       }
-    }
-    else {
-      deps.push(...parseDependencies(raw, key, shouldUpdate))
-    }
-  }
 
-  return [
-    {
-      name: raw.name,
-      private: !!raw.private,
-      version: raw.version,
-      type: 'package.json',
-      relative,
-      filepath,
-      raw,
-      deps,
-      resolved: [],
-    },
-  ]
+      span.setAttribute('taze.package.deps_count', deps.length)
+
+      return [
+        {
+          name: raw.name,
+          private: !!raw.private,
+          version: raw.version,
+          type: 'package.json' as const,
+          relative,
+          filepath,
+          raw,
+          deps,
+          resolved: [],
+        },
+      ]
+    }
+    catch (error) {
+      span.recordException(error instanceof Error ? error : new Error(String(error)))
+      span.setStatus({ code: SpanStatusCode.ERROR })
+      throw error
+    }
+    finally {
+      span.end()
+    }
+  })
 }
 
 export async function writePackageJSON(
   pkg: PackageMeta,
   options: CommonOptions,
 ) {
-  let changed = false
+  return tracer.startActiveSpan('taze.write.package_json', async (span) => {
+    try {
+      span.setAttribute('taze.write.file_path', pkg.relative)
+      span.setAttribute('taze.write.package_type', 'package.json')
+      let changed = false
 
-  for (const key of allDepsFields) {
-    if (!isDepFieldEnabled(key, options))
-      continue
+      for (const key of allDepsFields) {
+        if (!isDepFieldEnabled(key, options))
+          continue
 
-    if (key === 'packageManager') {
-      const value = Object.entries(dumpDependencies(pkg.resolved, 'packageManager'))[0]
-      if (value) {
-        pkg.raw ||= {}
-        const [name, versionWithCaret] = value
-        const version = versionWithCaret.replace('^', '')
-        let packageManagerValue = `${name}@${version}`
+        if (key === 'packageManager') {
+          const value = Object.entries(dumpDependencies(pkg.resolved, 'packageManager'))[0]
+          if (value) {
+            pkg.raw ||= {}
+            const [name, versionWithCaret] = value
+            const version = versionWithCaret.replace('^', '')
+            let packageManagerValue = `${name}@${version}`
 
-        const resolvedDep = pkg.resolved.find(dep => dep.source === 'packageManager' && dep.name === name)
-        if (resolvedDep?.hexHash) {
-          const integrity = resolvedDep.pkgData.integrity?.[version]
-          if (integrity) {
-            const newHexHash = getHexHashFromIntegrity(integrity)
-            packageManagerValue = `${packageManagerValue}+sha512.${newHexHash}`
+            const resolvedDep = pkg.resolved.find(dep => dep.source === 'packageManager' && dep.name === name)
+            if (resolvedDep?.hexHash) {
+              const integrity = resolvedDep.pkgData.integrity?.[version]
+              if (integrity) {
+                const newHexHash = getHexHashFromIntegrity(integrity)
+                packageManagerValue = `${packageManagerValue}+sha512.${newHexHash}`
+              }
+            }
+
+            pkg.raw.packageManager = packageManagerValue
+            changed = true
           }
         }
+        else {
+          if (getByPath(pkg.raw, key)) {
+            setByPath(pkg.raw, key, dumpDependencies(pkg.resolved, key))
+            changed = true
+          }
+        }
+      }
 
-        pkg.raw.packageManager = packageManagerValue
-        changed = true
+      span.setAttribute('taze.cache.changed', changed)
+
+      if (changed) {
+        for (const addon of (options.addons || builtinAddons)) {
+          await addon.beforeWrite?.(pkg, options)
+        }
+        await writeJSON(pkg.filepath, pkg.raw || {})
       }
     }
-    else {
-      if (getByPath(pkg.raw, key)) {
-        setByPath(pkg.raw, key, dumpDependencies(pkg.resolved, key))
-        changed = true
-      }
+    catch (error) {
+      span.recordException(error instanceof Error ? error : new Error(String(error)))
+      span.setStatus({ code: SpanStatusCode.ERROR })
+      throw error
     }
-  }
-
-  if (changed) {
-    for (const addon of (options.addons || builtinAddons)) {
-      await addon.beforeWrite?.(pkg, options)
+    finally {
+      span.end()
     }
-    await writeJSON(pkg.filepath, pkg.raw || {})
-  }
+  })
 }
