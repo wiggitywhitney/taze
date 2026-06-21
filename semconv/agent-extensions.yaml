@@ -186,3 +186,13 @@ groups:
     stability: development
     brief: "Agent-discovered span: taze.write.yarn_workspace"
     span_kind: internal
+  - id: span.taze.check.packages
+    type: span
+    stability: development
+    brief: "Agent-discovered span: taze.check.packages"
+    span_kind: internal
+  - id: span.taze.check.single_project
+    type: span
+    stability: development
+    brief: "Agent-discovered span: taze.check.single_project"
+    span_kind: internal
