@@ -53,3 +53,8 @@ groups:
     stability: development
     brief: "Agent-discovered span: taze.check.interactive"
     span_kind: internal
+  - id: span.taze.config.resolve
+    type: span
+    stability: development
+    brief: "Agent-discovered span: taze.config.resolve"
+    span_kind: internal
