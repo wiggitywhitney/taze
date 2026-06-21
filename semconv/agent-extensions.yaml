@@ -136,3 +136,13 @@ groups:
     stability: development
     brief: "Agent-discovered span: taze.io.load_packages"
     span_kind: internal
+  - id: span.taze.package.load_pnpm_workspace
+    type: span
+    stability: development
+    brief: "Agent-discovered span: taze.package.load_pnpm_workspace"
+    span_kind: internal
+  - id: span.taze.write.pnpm_workspace
+    type: span
+    stability: development
+    brief: "Agent-discovered span: taze.write.pnpm_workspace"
+    span_kind: internal
