@@ -1,4 +1,5 @@
 /* eslint-disable no-console */
+import { trace, SpanStatusCode } from '@opentelemetry/api'
 import type { SingleBar } from 'cli-progress'
 import type { Agent } from 'package-manager-detector'
 import type {
@@ -15,183 +16,208 @@ import { createMultiProgressBar } from '../../log'
 import { promptInteractive } from './interactive'
 import { outputErr, renderPackages } from './render'
 
+const tracer = trace.getTracer('taze')
+
 export async function check(options: CheckOptions) {
-  let exitCode = 0
-  const bars = options.loglevel === 'silent' ? null : createMultiProgressBar()
-  let packagesBar: SingleBar | undefined
-  const depBar = bars?.create(1, 0)
-
-  let resolvePkgs: PackageMeta[] = []
-
-  const { packages } = await CheckPackages(options, {
-    afterPackagesLoaded(pkgs) {
-      packagesBar = (options.recursive && pkgs.length)
-        ? bars?.create(pkgs.length, 0, { type: c.cyan('pkg'), name: c.cyan(pkgs[0].name) })
-        : undefined
-
-      const totalDeps = pkgs.reduce((acc, pkg) => acc + pkg.deps.length, 0)
-      depBar?.start(totalDeps, 0, { type: c.green('dep'), name: '' })
-    },
-    beforePackageStart(pkg) {
-      packagesBar?.increment(0, { name: c.cyan(pkg.name) })
-    },
-
-    beforePackageWrite() {
-      // disbale auto write
-      return false
-    },
-    afterPackageEnd() {
-      packagesBar?.increment(1)
-    },
-    afterPackagesEnd() {
-      depBar?.stop()
-    },
-    onDependencyResolved(_pkgName, name, progress) {
-      depBar?.update(progress, { name })
-    },
-  })
-  resolvePkgs = packages
-
-  bars?.stop()
-
-  if (options.interactive)
-    resolvePkgs = await promptInteractive(resolvePkgs, options)
-
-  const { lines, errLines } = renderPackages(resolvePkgs, options)
-
-  const hasChanges = resolvePkgs.length && resolvePkgs.some(i => i.resolved.some(j => j.update))
-  if (!hasChanges) {
-    if (errLines.length)
-      outputErr(errLines)
-    else
-      console.log(c.green('dependencies are already up-to-date'))
-
-    return exitCode
-  }
-
-  console.log(lines.join('\n'))
-
-  if (!options.all) {
-    const counter = resolvePkgs.reduce((counter, pkg) => {
-      for (let i = 0; i < pkg.resolved.length; i++) {
-        if (pkg.resolved[i].update)
-          return ++counter
+  return tracer.startActiveSpan('taze.check.run', async (span) => {
+    try {
+      if (options.mode != null) {
+        span.setAttribute('taze.check.mode', options.mode)
       }
-      return counter
-    }, 0)
+      span.setAttribute('taze.check.recursive', !!options.recursive)
+      span.setAttribute('taze.check.write_mode', !!options.write)
 
-    const last = resolvePkgs.length - counter
+      let exitCode = 0
+      const bars = options.loglevel === 'silent' ? null : createMultiProgressBar()
+      let packagesBar: SingleBar | undefined
+      const depBar = bars?.create(1, 0)
 
-    if (last === 1)
-      console.log(c.green('dependencies are already up-to-date in one package\n'))
-    else if (last > 0)
-      console.log(c.green(`dependencies are already up-to-date in ${last} packages\n`))
-  }
+      let resolvePkgs: PackageMeta[] = []
 
-  if (errLines.length)
-    outputErr(errLines)
+      const { packages } = await CheckPackages(options, {
+        afterPackagesLoaded(pkgs) {
+          packagesBar = (options.recursive && pkgs.length)
+            ? bars?.create(pkgs.length, 0, { type: c.cyan('pkg'), name: c.cyan(pkgs[0].name) })
+            : undefined
 
-  if (options.interactive && !options.write) {
-    options.write = await prompts([
-      {
-        name: 'write',
-        type: 'confirm',
-        initial: true,
-        message: c.green('write to package.json'),
-      },
-    ]).then(r => r.write)
-  }
-
-  if (options.write) {
-    for (const pkg of resolvePkgs) {
-      // TODO: somehow make this field controlable by CLI?
-      for (const addon of (options.addons || builtinAddons)) {
-        await addon.postprocess?.(pkg, options)
-      }
-      await writePackage(pkg, options)
-    }
-  }
-
-  // tips
-  if (!options.write) {
-    console.log()
-
-    if (options.mode === 'default')
-      console.log(`Run ${c.cyan('taze major')} to check major updates`)
-
-    if (hasChanges) {
-      if (options.failOnOutdated)
-        exitCode = 1
-
-      // Determine the most common package file type for the message
-      const fileTypes = resolvePkgs
-        .filter(pkg => pkg.resolved.some(dep => dep.update))
-        .map(pkg => pkg.type)
-      const hasPackageYaml = fileTypes.includes('package.yaml')
-      const fileTypeName = hasPackageYaml ? 'package.yaml' : 'package.json'
-
-      console.log(`Add ${c.green('-w')} to write to ${fileTypeName}`)
-    }
-
-    console.log()
-  }
-  else if (hasChanges) {
-    let packageManager: Agent | undefined
-    if (!options.install && !options.update && !options.interactive) {
-      packageManager = await detect()
-
-      // Determine the most common package file type for the message
-      const fileTypes = resolvePkgs
-        .filter(pkg => pkg.resolved.some(dep => dep.update))
-        .map(pkg => pkg.type)
-      const hasPackageYaml = fileTypes.includes('package.yaml')
-      const fileTypeName = hasPackageYaml ? 'package.yaml' : 'package.json'
-
-      console.log(
-        c.yellow`ℹ changes written to ${fileTypeName}, run ${c.cyan`${packageManager} i`} to install updates.`,
-      )
-    }
-
-    if (options.install || options.update || options.interactive) {
-      // Determine the most common package file type for the message
-      const fileTypes = resolvePkgs
-        .filter(pkg => pkg.resolved.some(dep => dep.update))
-        .map(pkg => pkg.type)
-      const hasPackageYaml = fileTypes.includes('package.yaml')
-      const fileTypeName = hasPackageYaml ? 'package.yaml' : 'package.json'
-
-      console.log(c.yellow(`ℹ changes written to ${fileTypeName}`))
-    }
-
-    if (options.interactive && !options.install) {
-      options.install = await prompts([
-        {
-          name: 'install',
-          type: 'confirm',
-          initial: true,
-          message: c.green('install now'),
+          const totalDeps = pkgs.reduce((acc, pkg) => acc + pkg.deps.length, 0)
+          depBar?.start(totalDeps, 0, { type: c.green('dep'), name: '' })
         },
-      ]).then(r => r.install)
+        beforePackageStart(pkg) {
+          packagesBar?.increment(0, { name: c.cyan(pkg.name) })
+        },
+
+        beforePackageWrite() {
+          // disbale auto write
+          return false
+        },
+        afterPackageEnd() {
+          packagesBar?.increment(1)
+        },
+        afterPackagesEnd() {
+          depBar?.stop()
+        },
+        onDependencyResolved(_pkgName, name, progress) {
+          depBar?.update(progress, { name })
+        },
+      })
+      resolvePkgs = packages
+
+      if (span.isRecording()) {
+        span.setAttribute('taze.check.packages_total', resolvePkgs.reduce((acc, pkg) => acc + pkg.deps.length, 0))
+      }
+      if (span.isRecording()) {
+        span.setAttribute('taze.check.packages_outdated', resolvePkgs.reduce((acc, pkg) => acc + pkg.resolved.filter(dep => dep.update).length, 0))
+      }
+
+      bars?.stop()
+
+      if (options.interactive)
+        resolvePkgs = await promptInteractive(resolvePkgs, options)
+
+      const { lines, errLines } = renderPackages(resolvePkgs, options)
+
+      const hasChanges = resolvePkgs.length && resolvePkgs.some(i => i.resolved.some(j => j.update))
+      if (!hasChanges) {
+        if (errLines.length)
+          outputErr(errLines)
+        else
+          console.log(c.green('dependencies are already up-to-date'))
+
+        return exitCode
+      }
+
+      console.log(lines.join('\n'))
+
+      if (!options.all) {
+        const counter = resolvePkgs.reduce((counter, pkg) => {
+          for (let i = 0; i < pkg.resolved.length; i++) {
+            if (pkg.resolved[i].update)
+              return ++counter
+          }
+          return counter
+        }, 0)
+
+        const last = resolvePkgs.length - counter
+
+        if (last === 1)
+          console.log(c.green('dependencies are already up-to-date in one package\n'))
+        else if (last > 0)
+          console.log(c.green(`dependencies are already up-to-date in ${last} packages\n`))
+      }
+
+      if (errLines.length)
+        outputErr(errLines)
+
+      if (options.interactive && !options.write) {
+        options.write = await prompts([
+          {
+            name: 'write',
+            type: 'confirm',
+            initial: true,
+            message: c.green('write to package.json'),
+          },
+        ]).then(r => r.write)
+      }
+
+      if (options.write) {
+        for (const pkg of resolvePkgs) {
+          // TODO: somehow make this field controlable by CLI?
+          for (const addon of (options.addons || builtinAddons)) {
+            await addon.postprocess?.(pkg, options)
+          }
+          await writePackage(pkg, options)
+        }
+      }
+
+      // tips
+      if (!options.write) {
+        console.log()
+
+        if (options.mode === 'default')
+          console.log(`Run ${c.cyan('taze major')} to check major updates`)
+
+        if (hasChanges) {
+          if (options.failOnOutdated)
+            exitCode = 1
+
+          // Determine the most common package file type for the message
+          const fileTypes = resolvePkgs
+            .filter(pkg => pkg.resolved.some(dep => dep.update))
+            .map(pkg => pkg.type)
+          const hasPackageYaml = fileTypes.includes('package.yaml')
+          const fileTypeName = hasPackageYaml ? 'package.yaml' : 'package.json'
+
+          console.log(`Add ${c.green('-w')} to write to ${fileTypeName}`)
+        }
+
+        console.log()
+      }
+      else if (hasChanges) {
+        let packageManager: Agent | undefined
+        if (!options.install && !options.update && !options.interactive) {
+          packageManager = await detect()
+
+          // Determine the most common package file type for the message
+          const fileTypes = resolvePkgs
+            .filter(pkg => pkg.resolved.some(dep => dep.update))
+            .map(pkg => pkg.type)
+          const hasPackageYaml = fileTypes.includes('package.yaml')
+          const fileTypeName = hasPackageYaml ? 'package.yaml' : 'package.json'
+
+          console.log(
+            c.yellow`ℹ changes written to ${fileTypeName}, run ${c.cyan`${packageManager} i`} to install updates.`,
+          )
+        }
+
+        if (options.install || options.update || options.interactive) {
+          // Determine the most common package file type for the message
+          const fileTypes = resolvePkgs
+            .filter(pkg => pkg.resolved.some(dep => dep.update))
+            .map(pkg => pkg.type)
+          const hasPackageYaml = fileTypes.includes('package.yaml')
+          const fileTypeName = hasPackageYaml ? 'package.yaml' : 'package.json'
+
+          console.log(c.yellow(`ℹ changes written to ${fileTypeName}`))
+        }
+
+        if (options.interactive && !options.install) {
+          options.install = await prompts([
+            {
+              name: 'install',
+              type: 'confirm',
+              initial: true,
+              message: c.green('install now'),
+            },
+          ]).then(r => r.install)
+        }
+
+        if (options.install) {
+          console.log(c.magenta('installing...'))
+          console.log()
+
+          await run(parseNi, [])
+        }
+
+        if (options.update) {
+          packageManager ||= await detect()
+          console.log(c.magenta('updating...'))
+          console.log()
+
+          await run(parseNup, [
+            options.recursive && '-r',
+            packageManager === 'pnpm' && '--no-save',
+          ].filter(Boolean) as string[])
+        }
+      }
+
+      return exitCode
+    } catch (error) {
+      span.recordException(error instanceof Error ? error : new Error(String(error)))
+      span.setStatus({ code: SpanStatusCode.ERROR })
+      throw error
+    } finally {
+      span.end()
     }
-
-    if (options.install) {
-      console.log(c.magenta('installing...'))
-      console.log()
-
-      await run(parseNi, [])
-    }
-
-    if (options.update) {
-      packageManager ||= await detect()
-      console.log(c.magenta('updating...'))
-      console.log()
-
-      await run(parseNup, [
-        options.recursive && '-r',
-        packageManager === 'pnpm' && '--no-save',
-      ].filter(Boolean) as string[])
-    }
-  }
-
-  return exitCode
+  })
 }
