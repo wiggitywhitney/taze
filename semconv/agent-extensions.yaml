@@ -146,3 +146,33 @@ groups:
     stability: development
     brief: "Agent-discovered span: taze.write.pnpm_workspace"
     span_kind: internal
+  - id: span.taze.io.load_cache
+    type: span
+    stability: development
+    brief: "Agent-discovered span: taze.io.load_cache"
+    span_kind: internal
+  - id: span.taze.io.dump_cache
+    type: span
+    stability: development
+    brief: "Agent-discovered span: taze.io.dump_cache"
+    span_kind: internal
+  - id: span.taze.io.get_package_data
+    type: span
+    stability: development
+    brief: "Agent-discovered span: taze.io.get_package_data"
+    span_kind: internal
+  - id: span.taze.resolve.dependency
+    type: span
+    stability: development
+    brief: "Agent-discovered span: taze.resolve.dependency"
+    span_kind: internal
+  - id: span.taze.resolve.dependencies
+    type: span
+    stability: development
+    brief: "Agent-discovered span: taze.resolve.dependencies"
+    span_kind: internal
+  - id: span.taze.resolve.package
+    type: span
+    stability: development
+    brief: "Agent-discovered span: taze.resolve.package"
+    span_kind: internal
