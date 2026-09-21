@@ -36,45 +36,45 @@ it('getMaxSatisfying', async () => {
   // default
   expect(getMaxSatisfying(versions, '', 'default', tags)).toBeUndefined()
   expect(getMaxSatisfying(versions, '*', 'default', tags)).toBeUndefined()
-  expect(getMaxSatisfying(versions, '6.0.0', 'default', tags)).toBeUndefined()
-  expect(latest).toBe(getMaxSatisfying(versions, '^6.0.0', 'default', tags))
-  expect(latest).toBe(getMaxSatisfying(versions, '>6.0.0', 'default', tags))
+  expect(getMaxSatisfying(versions, '7.0.0', 'default', tags)).toBeUndefined()
+  expect(latest).toBe(getMaxSatisfying(versions, '^7.0.0', 'default', tags))
+  expect(latest).toBe(getMaxSatisfying(versions, '>7.0.0', 'default', tags))
 
   // major
   expect(getMaxSatisfying(versions, '', 'major', tags)).not.toBeUndefined()
   expect(getMaxSatisfying(versions, '*', 'major', tags)).not.toBeUndefined()
-  expect(getMaxSatisfying(versions, '6.0.0', 'major', tags)).not.toBeUndefined()
-  expect(latest).toBe(getMaxSatisfying(versions, '^6.0.0', 'major', tags))
-  expect(latest).toBe(getMaxSatisfying(versions, '>6.0.0', 'major', tags))
+  expect(getMaxSatisfying(versions, '7.0.0', 'major', tags)).not.toBeUndefined()
+  expect(latest).toBe(getMaxSatisfying(versions, '^7.0.0', 'major', tags))
+  expect(latest).toBe(getMaxSatisfying(versions, '>7.0.0', 'major', tags))
 
   // minor
   expect(getMaxSatisfying(versions, '', 'minor', tags)).toBeUndefined()
   expect(getMaxSatisfying(versions, '*', 'minor', tags)).toBeUndefined()
-  expect(getMaxSatisfying(versions, '6.0.0', 'minor', tags)).not.toBeUndefined()
-  expect(getMaxSatisfying(versions, '^6.0.0', 'minor', tags)).not.toBeUndefined()
-  expect(getMaxSatisfying(versions, '>6.0.0', 'minor', tags)).not.toBeUndefined()
+  expect(getMaxSatisfying(versions, '7.0.0', 'minor', tags)).not.toBeUndefined()
+  expect(getMaxSatisfying(versions, '^7.0.0', 'minor', tags)).not.toBeUndefined()
+  expect(getMaxSatisfying(versions, '>7.0.0', 'minor', tags)).not.toBeUndefined()
 
   // patch
   expect(getMaxSatisfying(versions, '', 'patch', tags)).toBeUndefined()
   expect(getMaxSatisfying(versions, '*', 'patch', tags)).toBeUndefined()
-  expect(getMaxSatisfying(versions, '6.0.0', 'patch', tags)).not.toBeUndefined()
-  expect(getMaxSatisfying(versions, '^6.0.0', 'patch', tags)).not.toBeUndefined()
-  expect(getMaxSatisfying(versions, '>6.0.0', 'patch', tags)).not.toBeUndefined()
+  expect(getMaxSatisfying(versions, '7.0.0', 'patch', tags)).not.toBeUndefined()
+  expect(getMaxSatisfying(versions, '^7.0.0', 'patch', tags)).not.toBeUndefined()
+  expect(getMaxSatisfying(versions, '>7.0.0', 'patch', tags)).not.toBeUndefined()
 
   // latest
   expect(latest).toBe(getMaxSatisfying(versions, '', 'latest', tags))
   expect(latest).toBe(getMaxSatisfying(versions, '*', 'latest', tags))
-  expect(latest).toBe(getMaxSatisfying(versions, '6.0.0', 'latest', tags))
-  expect(latest).toBe(getMaxSatisfying(versions, '^6.0.0', 'latest', tags))
-  expect(latest).toBe(getMaxSatisfying(versions, '>6.0.0', 'latest', tags))
+  expect(latest).toBe(getMaxSatisfying(versions, '7.0.0', 'latest', tags))
+  expect(latest).toBe(getMaxSatisfying(versions, '^7.0.0', 'latest', tags))
+  expect(latest).toBe(getMaxSatisfying(versions, '>7.0.0', 'latest', tags))
 
   // newest — relax to existence checks; strict equality with tags.next diverges
   // when getMaxSatisfying picks highest-semver (e.g. a dev release) over the npm tag
   expect(getMaxSatisfying(versions, '', 'newest', tags)).toBeTruthy()
   expect(getMaxSatisfying(versions, '*', 'newest', tags)).toBeTruthy()
-  expect(getMaxSatisfying(versions, '6.0.0', 'newest', tags)).toBeTruthy()
-  expect(getMaxSatisfying(versions, '^6.0.0', 'newest', tags)).toBeTruthy()
-  expect(getMaxSatisfying(versions, '>6.0.0', 'newest', tags)).toBeTruthy()
+  expect(getMaxSatisfying(versions, '7.0.0', 'newest', tags)).toBeTruthy()
+  expect(getMaxSatisfying(versions, '^7.0.0', 'newest', tags)).toBeTruthy()
+  expect(getMaxSatisfying(versions, '>7.0.0', 'newest', tags)).toBeTruthy()
 
   // should not exceed latest version if it is in specified range, see #31
   expect('1.0.0-alpha.4').toBe(getMaxSatisfying([
