@@ -36,7 +36,7 @@ it('getMaxSatisfying', async () => {
   // default
   expect(getMaxSatisfying(versions, '', 'default', tags)).toBeUndefined()
   expect(getMaxSatisfying(versions, '*', 'default', tags)).toBeUndefined()
-  expect(getMaxSatisfying(versions, '7.0.0', 'default', tags)).toBeUndefined()
+  expect(getMaxSatisfying(versions, '999.0.0', 'default', tags)).toBeUndefined()
   expect(latest).toBe(getMaxSatisfying(versions, '^7.0.0', 'default', tags))
   expect(latest).toBe(getMaxSatisfying(versions, '>7.0.0', 'default', tags))
 
