@@ -35,6 +35,10 @@ groups:
         type: int
         stability: development
         brief: "Agent-discovered attribute: taze.io.catalogs_count"
+      - id: taze.fetch.force
+        type: boolean
+        stability: development
+        brief: "Agent-discovered attribute: taze.fetch.force"
   - id: span.taze.check.global
     type: span
     stability: development
@@ -199,4 +203,14 @@ groups:
     type: span
     stability: development
     brief: "Agent-discovered span: taze.check.single_project"
+    span_kind: internal
+  - id: span.taze.fetch.npm_package
+    type: span
+    stability: development
+    brief: "Agent-discovered span: taze.fetch.npm_package"
+    span_kind: internal
+  - id: span.taze.fetch.jsr_package_meta
+    type: span
+    stability: development
+    brief: "Agent-discovered span: taze.fetch.jsr_package_meta"
     span_kind: internal
