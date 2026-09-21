@@ -31,6 +31,10 @@ groups:
         type: string
         stability: development
         brief: "Agent-discovered attribute: taze.io.file_path"
+      - id: taze.io.catalogs_count
+        type: int
+        stability: development
+        brief: "Agent-discovered attribute: taze.io.catalogs_count"
   - id: span.taze.check.global
     type: span
     stability: development
@@ -175,4 +179,14 @@ groups:
     type: span
     stability: development
     brief: "Agent-discovered span: taze.check.resolve_package"
+    span_kind: internal
+  - id: span.taze.io.load_yarn_workspace
+    type: span
+    stability: development
+    brief: "Agent-discovered span: taze.io.load_yarn_workspace"
+    span_kind: internal
+  - id: span.taze.io.write_yarn_workspace
+    type: span
+    stability: development
+    brief: "Agent-discovered span: taze.io.write_yarn_workspace"
     span_kind: internal
