@@ -27,6 +27,10 @@ groups:
         type: string
         stability: development
         brief: "Agent-discovered attribute: taze.check.agent"
+      - id: taze.io.file_path
+        type: string
+        stability: development
+        brief: "Agent-discovered attribute: taze.io.file_path"
   - id: span.taze.check.global
     type: span
     stability: development
@@ -61,4 +65,19 @@ groups:
     type: span
     stability: development
     brief: "Agent-discovered span: taze.config.resolve"
+    span_kind: internal
+  - id: span.taze.io.load_bun_workspace
+    type: span
+    stability: development
+    brief: "Agent-discovered span: taze.io.load_bun_workspace"
+    span_kind: internal
+  - id: span.taze.io.write_bun_workspace
+    type: span
+    stability: development
+    brief: "Agent-discovered span: taze.io.write_bun_workspace"
+    span_kind: internal
+  - id: span.taze.io.write_bun_json
+    type: span
+    stability: development
+    brief: "Agent-discovered span: taze.io.write_bun_json"
     span_kind: internal
