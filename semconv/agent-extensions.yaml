@@ -19,3 +19,142 @@ groups:
         type: boolean
         stability: development
         brief: Whether the cache entry was modified during this operation
+      - id: taze.io.catalogs_found
+        type: string
+        stability: development
+        brief: "Agent-discovered attribute: taze.io.catalogs_found"
+  - id: span.taze.check.global
+    type: span
+    stability: development
+    brief: "Agent-discovered span: taze.check.global"
+    span_kind: internal
+  - id: span.taze.check.load_global_pnpm
+    type: span
+    stability: development
+    brief: "Agent-discovered span: taze.check.load_global_pnpm"
+    span_kind: internal
+  - id: span.taze.check.load_global_npm
+    type: span
+    stability: development
+    brief: "Agent-discovered span: taze.check.load_global_npm"
+    span_kind: internal
+  - id: span.taze.check.install_pkg
+    type: span
+    stability: development
+    brief: "Agent-discovered span: taze.check.install_pkg"
+    span_kind: internal
+  - id: span.taze.check.run
+    type: span
+    stability: development
+    brief: "Agent-discovered span: taze.check.run"
+    span_kind: internal
+  - id: span.taze.check.interactive
+    type: span
+    stability: development
+    brief: "Agent-discovered span: taze.check.interactive"
+    span_kind: internal
+  - id: span.taze.config.resolve
+    type: span
+    stability: development
+    brief: "Agent-discovered span: taze.config.resolve"
+    span_kind: internal
+  - id: span.taze.io.load_bun_workspace
+    type: span
+    stability: development
+    brief: "Agent-discovered span: taze.io.load_bun_workspace"
+    span_kind: internal
+  - id: span.taze.io.write_bun_workspace
+    type: span
+    stability: development
+    brief: "Agent-discovered span: taze.io.write_bun_workspace"
+    span_kind: internal
+  - id: span.taze.io.write_bun_json
+    type: span
+    stability: development
+    brief: "Agent-discovered span: taze.io.write_bun_json"
+    span_kind: internal
+  - id: span.taze.io.load_package_json
+    type: span
+    stability: development
+    brief: "Agent-discovered span: taze.io.load_package_json"
+    span_kind: internal
+  - id: span.taze.io.write_package_json
+    type: span
+    stability: development
+    brief: "Agent-discovered span: taze.io.write_package_json"
+    span_kind: internal
+  - id: span.taze.io.read_yaml
+    type: span
+    stability: development
+    brief: "Agent-discovered span: taze.io.read_yaml"
+    span_kind: internal
+  - id: span.taze.io.write_yaml
+    type: span
+    stability: development
+    brief: "Agent-discovered span: taze.io.write_yaml"
+    span_kind: internal
+  - id: span.taze.io.load_package_yaml
+    type: span
+    stability: development
+    brief: "Agent-discovered span: taze.io.load_package_yaml"
+    span_kind: internal
+  - id: span.taze.io.write_package_yaml
+    type: span
+    stability: development
+    brief: "Agent-discovered span: taze.io.write_package_yaml"
+    span_kind: internal
+  - id: span.taze.io.read_json
+    type: span
+    stability: development
+    brief: "Agent-discovered span: taze.io.read_json"
+    span_kind: internal
+  - id: span.taze.io.write_json
+    type: span
+    stability: development
+    brief: "Agent-discovered span: taze.io.write_json"
+    span_kind: internal
+  - id: span.taze.io.write_package
+    type: span
+    stability: development
+    brief: "Agent-discovered span: taze.io.write_package"
+    span_kind: internal
+  - id: span.taze.io.load_package
+    type: span
+    stability: development
+    brief: "Agent-discovered span: taze.io.load_package"
+    span_kind: internal
+  - id: span.taze.io.load_packages
+    type: span
+    stability: development
+    brief: "Agent-discovered span: taze.io.load_packages"
+    span_kind: internal
+  - id: span.taze.io.load_pnpm_workspace
+    type: span
+    stability: development
+    brief: "Agent-discovered span: taze.io.load_pnpm_workspace"
+    span_kind: internal
+  - id: span.taze.io.write_pnpm_workspace
+    type: span
+    stability: development
+    brief: "Agent-discovered span: taze.io.write_pnpm_workspace"
+    span_kind: internal
+  - id: span.taze.check.packages
+    type: span
+    stability: development
+    brief: "Agent-discovered span: taze.check.packages"
+    span_kind: internal
+  - id: span.taze.check.single_project
+    type: span
+    stability: development
+    brief: "Agent-discovered span: taze.check.single_project"
+    span_kind: internal
+  - id: span.taze.fetch.package
+    type: span
+    stability: development
+    brief: "Agent-discovered span: taze.fetch.package"
+    span_kind: internal
+  - id: span.taze.fetch.jsr_package_meta
+    type: span
+    stability: development
+    brief: "Agent-discovered span: taze.fetch.jsr_package_meta"
+    span_kind: internal

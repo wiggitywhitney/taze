@@ -1,8 +1,11 @@
+import { trace, SpanStatusCode } from '@opentelemetry/api';
 import type { CheckOptions, DependencyFilter, DependencyResolvedCallback, PackageMeta, RawDep } from '../types'
 import { newQueue } from '@henrygd/queue'
 import { loadPackages, writePackage } from '../io/packages'
 import { dumpCache, loadCache, resolvePackage } from '../io/resolves'
 import { queueContext } from '../utils/context'
+
+const tracer = trace.getTracer('taze');
 
 export interface CheckEventCallbacks {
   afterPackagesLoaded?: (pkgs: PackageMeta[]) => void
@@ -15,62 +18,103 @@ export interface CheckEventCallbacks {
 }
 
 export async function CheckPackages(options: CheckOptions, callbacks: CheckEventCallbacks = {}) {
-  if (!options.force)
-    await loadCache()
+  return tracer.startActiveSpan('taze.check.packages', async (span) => {
+    try {
+      if (options != null) {
+        if (options.mode != null) {
+          span.setAttribute('taze.check.mode', options.mode);
+        }
+        if (options.recursive != null) {
+          span.setAttribute('taze.check.recursive', options.recursive);
+        }
+        if (options.write != null) {
+          span.setAttribute('taze.check.write_mode', options.write);
+        }
+      }
+      if (!options.force)
+        await loadCache()
 
-  // packages loading
-  const packages = await loadPackages(options)
-  callbacks.afterPackagesLoaded?.(packages)
+      // packages loading
+      const packages = await loadPackages(options)
+      if (packages != null) {
+        span.setAttribute('taze.check.packages_total', packages.length);
+      }
+      callbacks.afterPackagesLoaded?.(packages)
 
-  const privatePackageNames = packages
-    .filter(i => i.private)
-    .map(i => i.name)
-    .filter(i => i)
+      const privatePackageNames = packages
+        .filter(i => i.private)
+        .map(i => i.name)
+        .filter(i => i)
 
-  // to filter out private dependency in monorepo
-  const filter = (dep: RawDep) => !privatePackageNames.includes(dep.name)
+      // to filter out private dependency in monorepo
+      const filter = (dep: RawDep) => !privatePackageNames.includes(dep.name)
 
-  let resolvedCount = 0
-  const onDependencyResolved: DependencyResolvedCallback = (pkgName, name, progress, total) => {
-    resolvedCount++
-    callbacks.onDependencyResolved?.(pkgName, name, resolvedCount, total)
-  }
+      let resolvedCount = 0
+      const onDependencyResolved: DependencyResolvedCallback = (pkgName, name, progress, total) => {
+        resolvedCount++
+        callbacks.onDependencyResolved?.(pkgName, name, resolvedCount, total)
+      }
 
-  const queue = newQueue(options.concurrency || 10)
+      const queue = newQueue(options.concurrency || 10)
 
-  await queueContext.run(queue, () => {
-    // run all CheckSingleProject in parallel
-    // the actual resolveDependencies within CheckSingleProject -> resolvePackage -> resolveDependencies is
-    // actually limited by the queueContext/queue, so it won't overwhelm the npm meta server.
-    return Promise.all(packages.map(async (pkg) => {
-      callbacks.beforePackageStart?.(pkg)
-      await CheckSingleProject(pkg, options, filter, { ...callbacks, onDependencyResolved })
-      callbacks.afterPackageEnd?.(pkg)
-    }))
-  })
+      await queueContext.run(queue, () => {
+        // run all CheckSingleProject in parallel
+        // the actual resolveDependencies within CheckSingleProject -> resolvePackage -> resolveDependencies is
+        // actually limited by the queueContext/queue, so it won't overwhelm the npm meta server.
+        return Promise.all(packages.map(async (pkg) => {
+          callbacks.beforePackageStart?.(pkg)
+          await CheckSingleProject(pkg, options, filter, { ...callbacks, onDependencyResolved })
+          callbacks.afterPackageEnd?.(pkg)
+        }))
+      })
 
-  callbacks.afterPackagesEnd?.(packages)
+      callbacks.afterPackagesEnd?.(packages)
 
-  await dumpCache()
+      await dumpCache()
 
-  return {
-    packages,
-  }
+      return {
+        packages,
+      }
+    } catch (error) {
+      span.recordException(error instanceof Error ? error : new Error(String(error)));
+      span.setStatus({ code: SpanStatusCode.ERROR });
+      throw error;
+    } finally {
+      span.end();
+    }
+  });
 }
 
 async function CheckSingleProject(pkg: PackageMeta, options: CheckOptions, filter: DependencyFilter = () => true, callbacks: CheckEventCallbacks = {}) {
-  await resolvePackage(pkg, options, filter, callbacks.onDependencyResolved)
+  return tracer.startActiveSpan('taze.check.single_project', async (span) => {
+    try {
+      if (pkg != null && pkg.name != null) {
+        span.setAttribute('taze.package.name', pkg.name);
+      }
+      await resolvePackage(pkg, options, filter, callbacks.onDependencyResolved)
 
-  const { resolved } = pkg
-  const changes = resolved.filter(i => i.update)
+      const { resolved } = pkg
+      const changes = resolved.filter(i => i.update)
 
-  if (options.write && changes.length) {
-    const shouldWrite = await Promise.resolve(callbacks.beforePackageWrite?.(pkg))
+      if (changes != null) {
+        span.setAttribute('taze.write.changes_count', changes.length);
+      }
 
-    if (shouldWrite !== false) {
-      await writePackage(pkg, options)
-      callbacks.afterPackageWrite?.(pkg)
+      if (options.write && changes.length) {
+        const shouldWrite = await Promise.resolve(callbacks.beforePackageWrite?.(pkg))
+
+        if (shouldWrite !== false) {
+          await writePackage(pkg, options)
+          callbacks.afterPackageWrite?.(pkg)
+        }
+      }
+      return pkg
+    } catch (error) {
+      span.recordException(error instanceof Error ? error : new Error(String(error)));
+      span.setStatus({ code: SpanStatusCode.ERROR });
+      throw error;
+    } finally {
+      span.end();
     }
-  }
-  return pkg
+  });
 }
