@@ -1,8 +1,11 @@
+import { trace, SpanStatusCode } from '@opentelemetry/api'
 import type { PackageVersionsInfoWithMetadata } from 'get-npm-meta'
 import type { JsrPackageMeta, PackageData } from '../types'
 import process from 'node:process'
 import { getVersions } from 'get-npm-meta'
 import { fetch as ofetch } from 'ofetch'
+
+const tracer = trace.getTracer('taze')
 
 const TIMEOUT = 5000
 const JSR_API_REGISTRY = 'https://jsr.io/'
@@ -49,40 +52,70 @@ const fetchWithUserAgent: typeof fetch = (input, init) => {
 }
 
 export async function fetchPackage(spec: string, force = false): Promise<PackageData> {
-  const data = await Promise.race([
-    getVersions(spec, {
-      force,
-      fetch: fetchWithUserAgent,
-      metadata: true,
-      throw: false,
-    }),
-    new Promise<Packument>(
-      (_, reject) => setTimeout(() => reject(new Error(`Timeout requesting "${spec}"`)), TIMEOUT),
-    ),
-  ]) as PackageVersionsInfoWithMetadata
+  return tracer.startActiveSpan('taze.fetch.package', async (span) => {
+    try {
+      span.setAttribute('taze.package.name', spec)
+      span.setAttribute('taze.fetch.registry', 'npm')
+      const data = await Promise.race([
+        getVersions(spec, {
+          force,
+          fetch: fetchWithUserAgent,
+          metadata: true,
+          throw: false,
+        }),
+        new Promise<Packument>(
+          (_, reject) => setTimeout(() => reject(new Error(`Timeout requesting "${spec}"`)), TIMEOUT),
+        ),
+      ]) as PackageVersionsInfoWithMetadata
 
-  if ('error' in data)
-    throw new Error(`Failed to fetch package "${spec}": ${data.error}`)
+      if ('error' in data) {
+        span.setAttribute('taze.fetch.error', String(data.error))
+        throw new Error(`Failed to fetch package "${spec}": ${data.error}`)
+      }
 
-  return toPackageData(data)
+      return toPackageData(data)
+    }
+    catch (error) {
+      span.recordException(error instanceof Error ? error : new Error(String(error)))
+      span.setStatus({ code: SpanStatusCode.ERROR })
+      throw error
+    }
+    finally {
+      span.end()
+    }
+  })
 }
 
 export async function fetchJsrPackageMeta(name: string): Promise<PackageData> {
-  const meta = await Promise.race([
-    fetchWithUserAgent(new URL(`${name}/meta.json`, JSR_API_REGISTRY), {
-      headers: {
-        accept: 'application/json',
-      },
-    }).then(r => r.json()),
-    new Promise<JsrPackageMeta>(
-      (_, reject) => setTimeout(() => reject(new Error(`Timeout requesting "${name}"`)), TIMEOUT),
-    ),
-  ]) as JsrPackageMeta
+  return tracer.startActiveSpan('taze.fetch.jsr_package', async (span) => {
+    try {
+      span.setAttribute('taze.package.name', name)
+      span.setAttribute('taze.fetch.registry', 'jsr')
+      const meta = await Promise.race([
+        fetchWithUserAgent(new URL(`${name}/meta.json`, JSR_API_REGISTRY), {
+          headers: {
+            accept: 'application/json',
+          },
+        }).then(r => r.json()),
+        new Promise<JsrPackageMeta>(
+          (_, reject) => setTimeout(() => reject(new Error(`Timeout requesting "${name}"`)), TIMEOUT),
+        ),
+      ]) as JsrPackageMeta
 
-  return {
-    versions: Object.keys(meta.versions),
-    tags: { latest: meta.latest },
-  }
+      return {
+        versions: Object.keys(meta.versions),
+        tags: { latest: meta.latest },
+      }
+    }
+    catch (error) {
+      span.recordException(error instanceof Error ? error : new Error(String(error)))
+      span.setStatus({ code: SpanStatusCode.ERROR })
+      throw error
+    }
+    finally {
+      span.end()
+    }
+  })
 }
 
 function toPackageData(data: PackageVersionsInfoWithMetadata): PackageData {

@@ -1,3 +1,4 @@
+import { trace, SpanStatusCode } from '@opentelemetry/api'
 import type { CommonOptions, PackageMeta } from '../types'
 import { existsSync, promises as fs } from 'node:fs'
 import process from 'node:process'
@@ -13,35 +14,81 @@ import { loadPackageYAML, writePackageYAML } from './packageYaml'
 import { loadPnpmWorkspace, writePnpmWorkspace } from './pnpmWorkspaces'
 import { loadYarnWorkspace, writeYarnWorkspace } from './yarnWorkspaces'
 
+const tracer = trace.getTracer('taze')
+
 export async function readJSON(filepath: string) {
-  return JSON.parse(await fs.readFile(filepath, 'utf-8'))
+  return tracer.startActiveSpan('taze.io.read_json', async (span) => {
+    try {
+      span.setAttribute('taze.package.file_path', filepath)
+      return JSON.parse(await fs.readFile(filepath, 'utf-8'))
+    }
+    catch (error) {
+      span.recordException(error instanceof Error ? error : new Error(String(error)))
+      span.setStatus({ code: SpanStatusCode.ERROR })
+      throw error
+    }
+    finally {
+      span.end()
+    }
+  })
 }
 
 export async function writeJSON(filepath: string, data: Record<string, unknown>) {
-  const actualContent = await fs.readFile(filepath, 'utf-8')
-  const fileIndent = detectIndent(actualContent).indent || '  '
+  return tracer.startActiveSpan('taze.io.write_json', async (span) => {
+    try {
+      span.setAttribute('taze.write.file_path', filepath)
+      const actualContent = await fs.readFile(filepath, 'utf-8')
+      const fileIndent = detectIndent(actualContent).indent || '  '
 
-  return await fs.writeFile(filepath, `${JSON.stringify(data, null, fileIndent)}\n`, 'utf-8')
+      return await fs.writeFile(filepath, `${JSON.stringify(data, null, fileIndent)}\n`, 'utf-8')
+    }
+    catch (error) {
+      span.recordException(error instanceof Error ? error : new Error(String(error)))
+      span.setStatus({ code: SpanStatusCode.ERROR })
+      throw error
+    }
+    finally {
+      span.end()
+    }
+  })
 }
 
 export async function writePackage(
   pkg: PackageMeta,
   options: CommonOptions,
 ) {
-  switch (pkg.type) {
-    case 'package.json':
-      return writePackageJSON(pkg, options)
-    case 'package.yaml':
-      return writePackageYAML(pkg, options)
-    case 'pnpm-workspace.yaml':
-      return writePnpmWorkspace(pkg, options)
-    case 'bun-workspace':
-      return writeBunWorkspace(pkg, options)
-    case '.yarnrc.yml':
-      return writeYarnWorkspace(pkg, options)
-    default:
-      throw new Error(`Unsupported package type: ${pkg.type}`)
-  }
+  return tracer.startActiveSpan('taze.io.write_package', async (span) => {
+    try {
+      if (pkg != null) {
+        span.setAttribute('taze.write.package_type', pkg.type)
+        if (pkg.filepath != null) {
+          span.setAttribute('taze.write.file_path', pkg.filepath)
+        }
+      }
+      switch (pkg.type) {
+        case 'package.json':
+          return writePackageJSON(pkg, options)
+        case 'package.yaml':
+          return writePackageYAML(pkg, options)
+        case 'pnpm-workspace.yaml':
+          return writePnpmWorkspace(pkg, options)
+        case 'bun-workspace':
+          return writeBunWorkspace(pkg, options)
+        case '.yarnrc.yml':
+          return writeYarnWorkspace(pkg, options)
+        default:
+          throw new Error(`Unsupported package type: ${pkg.type}`)
+      }
+    }
+    catch (error) {
+      span.recordException(error instanceof Error ? error : new Error(String(error)))
+      span.setStatus({ code: SpanStatusCode.ERROR })
+      throw error
+    }
+    finally {
+      span.end()
+    }
+  })
 }
 
 export async function loadPackage(
@@ -49,128 +96,160 @@ export async function loadPackage(
   options: CommonOptions,
   shouldUpdate: (name: string) => boolean,
 ): Promise<PackageMeta[]> {
-  if (relative.endsWith('pnpm-workspace.yaml'))
-    return loadPnpmWorkspace(relative, options, shouldUpdate)
-
-  if (relative.endsWith('.yarnrc.yml'))
-    return loadYarnWorkspace(relative, options, shouldUpdate)
-
-  if (relative.endsWith('package.yaml'))
-    return loadPackageYAML(relative, options, shouldUpdate)
-
-  // Check if this package.json contains Bun workspaces with catalogs
-  if (relative.endsWith('package.json')) {
-    const filepath = resolve(options.cwd ?? '', relative)
+  return tracer.startActiveSpan('taze.io.load_package', async (span) => {
     try {
-      const raw = await readJSON(filepath)
-      const workspaces = raw?.workspaces
+      span.setAttribute('taze.package.file_path', relative)
+      if (relative.endsWith('pnpm-workspace.yaml'))
+        return loadPnpmWorkspace(relative, options, shouldUpdate)
 
-      // Only process Bun catalogs if we detect Bun is being used
-      if (workspaces && (workspaces.catalog || workspaces.catalogs)) {
-        const cwd = resolve(options.cwd || process.cwd())
-        const hasBunLock = existsSync(join(cwd, 'bun.lockb')) || existsSync(join(cwd, 'bun.lock'))
+      if (relative.endsWith('.yarnrc.yml'))
+        return loadYarnWorkspace(relative, options, shouldUpdate)
 
-        if (hasBunLock) {
-          // Pass the same raw object to both loaders so writes don't clobber each other
-          const bunWorkspaces = await loadBunWorkspace(relative, options, shouldUpdate, raw)
-          const packageJson = await loadPackageJSON(relative, options, shouldUpdate, raw)
-          return [...bunWorkspaces, ...packageJson]
+      if (relative.endsWith('package.yaml'))
+        return loadPackageYAML(relative, options, shouldUpdate)
+
+      // Check if this package.json contains Bun workspaces with catalogs
+      if (relative.endsWith('package.json')) {
+        const filepath = resolve(options.cwd ?? '', relative)
+        try {
+          const raw = await readJSON(filepath)
+          const workspaces = raw?.workspaces
+
+          // Only process Bun catalogs if we detect Bun is being used
+          if (workspaces && (workspaces.catalog || workspaces.catalogs)) {
+            const cwd = resolve(options.cwd || process.cwd())
+            const hasBunLock = existsSync(join(cwd, 'bun.lockb')) || existsSync(join(cwd, 'bun.lock'))
+
+            if (hasBunLock) {
+              // Pass the same raw object to both loaders so writes don't clobber each other
+              const bunWorkspaces = await loadBunWorkspace(relative, options, shouldUpdate, raw)
+              const packageJson = await loadPackageJSON(relative, options, shouldUpdate, raw)
+              return [...bunWorkspaces, ...packageJson]
+            }
+          }
+
+          // Reuse already-read raw for non-bun case
+          return loadPackageJSON(relative, options, shouldUpdate, raw)
+        }
+        catch {
+          // Safe guard: If we can't read the file, fall back to normal package.json loading
         }
       }
 
-      // Reuse already-read raw for non-bun case
-      return loadPackageJSON(relative, options, shouldUpdate, raw)
+      return loadPackageJSON(relative, options, shouldUpdate)
     }
-    catch {
-      // Safe guard: If we can't read the file, fall back to normal package.json loading
+    catch (error) {
+      span.recordException(error instanceof Error ? error : new Error(String(error)))
+      span.setStatus({ code: SpanStatusCode.ERROR })
+      throw error
     }
-  }
-
-  return loadPackageJSON(relative, options, shouldUpdate)
+    finally {
+      span.end()
+    }
+  })
 }
 
 export async function loadPackages(options: CommonOptions): Promise<PackageMeta[]> {
-  let packagesNames: string[] = []
-
-  const cwd = resolve(options.cwd || process.cwd())
-  const filter = createDependenciesFilter(options.include, options.exclude)
-
-  if (options.recursive) {
-    // Look for both package.yaml and package.json files
-    const yamlPackages = await glob('**/package.yaml', {
-      ignore: DEFAULT_IGNORE_PATHS.concat(options.ignorePaths || []),
-      cwd: options.cwd,
-      onlyFiles: true,
-      dot: false,
-      expandDirectories: false,
-    })
-
-    const jsonPackages = await glob('**/package.json', {
-      ignore: DEFAULT_IGNORE_PATHS.concat(options.ignorePaths || []),
-      cwd: options.cwd,
-      onlyFiles: true,
-      dot: false,
-      expandDirectories: false,
-    })
-
-    // Prioritize package.yaml over package.json in the same directory
-    const packageDirs = new Set<string>()
-
-    // Add all package.yaml files first (higher priority)
-    for (const yamlPkg of yamlPackages) {
-      packagesNames.push(yamlPkg)
-      const dir = dirname(yamlPkg)
-      packageDirs.add(dir)
-    }
-
-    // Add package.json files only if no package.yaml exists in the same directory
-    for (const jsonPkg of jsonPackages) {
-      const dir = dirname(jsonPkg)
-      if (!packageDirs.has(dir)) {
-        packagesNames.push(jsonPkg)
+  return tracer.startActiveSpan('taze.io.load_packages', async (span) => {
+    try {
+      if (options != null && options.recursive != null) {
+        span.setAttribute('taze.check.recursive', options.recursive)
       }
+      let packagesNames: string[] = []
+
+      const cwd = resolve(options.cwd || process.cwd())
+      const filter = createDependenciesFilter(options.include, options.exclude)
+
+      if (options.recursive) {
+        // Look for both package.yaml and package.json files
+        const yamlPackages = await glob('**/package.yaml', {
+          ignore: DEFAULT_IGNORE_PATHS.concat(options.ignorePaths || []),
+          cwd: options.cwd,
+          onlyFiles: true,
+          dot: false,
+          expandDirectories: false,
+        })
+
+        const jsonPackages = await glob('**/package.json', {
+          ignore: DEFAULT_IGNORE_PATHS.concat(options.ignorePaths || []),
+          cwd: options.cwd,
+          onlyFiles: true,
+          dot: false,
+          expandDirectories: false,
+        })
+
+        // Prioritize package.yaml over package.json in the same directory
+        const packageDirs = new Set<string>()
+
+        // Add all package.yaml files first (higher priority)
+        for (const yamlPkg of yamlPackages) {
+          packagesNames.push(yamlPkg)
+          const dir = dirname(yamlPkg)
+          packageDirs.add(dir)
+        }
+
+        // Add package.json files only if no package.yaml exists in the same directory
+        for (const jsonPkg of jsonPackages) {
+          const dir = dirname(jsonPkg)
+          if (!packageDirs.has(dir)) {
+            packagesNames.push(jsonPkg)
+          }
+        }
+
+        packagesNames = packagesNames.sort((a, b) => a.localeCompare(b))
+      }
+      else {
+        packagesNames = await Array.fromAsync(await glob('package.{yaml,json}', { cwd }))
+      }
+
+      if (options.ignoreOtherWorkspaces) {
+        packagesNames = (await Promise.all(
+          packagesNames.map(async (packagePath) => {
+            if (!packagePath.includes('/'))
+              return [packagePath]
+
+            const absolute = join(cwd, packagePath)
+            const gitDir = await findUp('.git', { cwd: absolute, stopAt: cwd })
+            if (gitDir && dirname(gitDir) !== cwd)
+              return []
+            const pnpmWorkspace = await findUp('pnpm-workspace.yaml', { cwd: absolute, stopAt: cwd })
+            if (pnpmWorkspace && dirname(pnpmWorkspace) !== cwd)
+              return []
+            const yarnWorkspace = await findUp('.yarnrc.yml', { cwd: absolute, stopAt: cwd })
+            if (yarnWorkspace && dirname(yarnWorkspace) !== cwd)
+              return []
+            return [packagePath]
+          }),
+        )).flat()
+      }
+
+      if (existsSync(join(cwd, 'pnpm-workspace.yaml'))) {
+        packagesNames.unshift('pnpm-workspace.yaml')
+      }
+
+      if (existsSync(join(cwd, '.yarnrc.yml'))) {
+        packagesNames.unshift('.yarnrc.yml')
+      }
+
+      const packages = (await Promise.all(
+        packagesNames.map(
+          relative => loadPackage(relative, options, filter),
+        ),
+      )).flat()
+
+      if (packages != null) {
+        span.setAttribute('taze.config.sources_found', packages.length)
+      }
+
+      return packages
     }
-
-    packagesNames = packagesNames.sort((a, b) => a.localeCompare(b))
-  }
-  else {
-    packagesNames = await Array.fromAsync(await glob('package.{yaml,json}', { cwd }))
-  }
-
-  if (options.ignoreOtherWorkspaces) {
-    packagesNames = (await Promise.all(
-      packagesNames.map(async (packagePath) => {
-        if (!packagePath.includes('/'))
-          return [packagePath]
-
-        const absolute = join(cwd, packagePath)
-        const gitDir = await findUp('.git', { cwd: absolute, stopAt: cwd })
-        if (gitDir && dirname(gitDir) !== cwd)
-          return []
-        const pnpmWorkspace = await findUp('pnpm-workspace.yaml', { cwd: absolute, stopAt: cwd })
-        if (pnpmWorkspace && dirname(pnpmWorkspace) !== cwd)
-          return []
-        const yarnWorkspace = await findUp('.yarnrc.yml', { cwd: absolute, stopAt: cwd })
-        if (yarnWorkspace && dirname(yarnWorkspace) !== cwd)
-          return []
-        return [packagePath]
-      }),
-    )).flat()
-  }
-
-  if (existsSync(join(cwd, 'pnpm-workspace.yaml'))) {
-    packagesNames.unshift('pnpm-workspace.yaml')
-  }
-
-  if (existsSync(join(cwd, '.yarnrc.yml'))) {
-    packagesNames.unshift('.yarnrc.yml')
-  }
-
-  const packages = (await Promise.all(
-    packagesNames.map(
-      relative => loadPackage(relative, options, filter),
-    ),
-  )).flat()
-
-  return packages
+    catch (error) {
+      span.recordException(error instanceof Error ? error : new Error(String(error)))
+      span.setStatus({ code: SpanStatusCode.ERROR })
+      throw error
+    }
+    finally {
+      span.end()
+    }
+  })
 }
